@@ -243,6 +243,10 @@ function freeBusyTier(hours) {
   return "partial";
 }
 
+function tierColor(tier) {
+  return tier === "free" ? GREEN : tier === "busy" ? RED : ORANGE;
+}
+
 function dominantStatus(hours) {
   let free = 0;
   let busy = 0;
@@ -1266,13 +1270,14 @@ export default function App() {
         {days.map((d) => {
           const iso = d;
           const entries = dayData[iso] || {};
-          const people = Object.entries(entries).filter(([n]) => n !== name);
+          const myEntry = entries[name];
+          const others = Object.entries(entries).filter(([n]) => n !== name);
           const allEntries = Object.entries(entries).sort(([a], [b]) =>
             a === name ? -1 : b === name ? 1 : a.localeCompare(b)
           );
-          const freePeople = people.filter(([, e]) => freeBusyTier(e.hours) === "free");
-          const partialPeople = people.filter(([, e]) => freeBusyTier(e.hours) === "partial");
-          const busyPeople = people.filter(([, e]) => freeBusyTier(e.hours) === "busy");
+          const freeOthers = others.filter(([, e]) => freeBusyTier(e.hours) === "free");
+          const partialOthers = others.filter(([, e]) => freeBusyTier(e.hours) === "partial");
+          const busyOthers = others.filter(([, e]) => freeBusyTier(e.hours) === "busy");
           const isOpen = openDay === iso;
           const isToday = iso === today;
 
@@ -1284,23 +1289,32 @@ export default function App() {
                   <div style={styles.dayName}>{dayLabel(d, today)}</div>
                 </div>
                 <div style={styles.dayPeople}>
-                  {people.length === 0 ? (
+                  {allEntries.length === 0 ? (
                     <span style={styles.noOne}>
                       {entryCountLabel(allEntries.length)}
                     </span>
                   ) : (
                     <>
-                      {freePeople.slice(0, 5).map(([n]) => (
+                      {myEntry && (
+                        <span
+                          style={styles.avatarChip(
+                            tierColor(freeBusyTier(myEntry.hours))
+                          )}
+                        >
+                          {initials(name)}
+                        </span>
+                      )}
+                      {freeOthers.slice(0, 5).map(([n]) => (
                         <span key={n} style={styles.avatarChip(GREEN)}>
                           {initials(n)}
                         </span>
                       ))}
-                      {partialPeople.slice(0, 4).map(([n]) => (
+                      {partialOthers.slice(0, 4).map(([n]) => (
                         <span key={n} style={styles.avatarChip(ORANGE)}>
                           {initials(n)}
                         </span>
                       ))}
-                      {busyPeople.slice(0, 3).map(([n]) => (
+                      {busyOthers.slice(0, 3).map(([n]) => (
                         <span key={n} style={styles.avatarChip(RED)}>
                           {initials(n)}
                         </span>
