@@ -1245,6 +1245,7 @@ const styles = {
   },
   headerAccent: {
     color: GREEN,
+    fontWeight: 700,
   },
   avatarButton: {
     position: "relative",
