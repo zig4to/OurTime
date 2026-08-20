@@ -1128,10 +1128,7 @@ export default function App() {
                         </span>
                       ))}
                       {busyPeople.slice(0, 3).map(([n]) => (
-                        <span
-                          key={n}
-                          style={{ ...styles.avatarChip(RED), opacity: 0.55 }}
-                        >
+                        <span key={n} style={styles.avatarChip(RED)}>
                           {initials(n)}
                         </span>
                       ))}
