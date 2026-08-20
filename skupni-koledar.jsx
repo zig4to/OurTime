@@ -335,6 +335,10 @@ export default function App() {
     setMyHours(blankHours());
   }
 
+  function fillWholeDay(status) {
+    setMyHours(Array(24).fill(status));
+  }
+
   async function deleteMySchedule(iso) {
     await persistEntry(iso, { hours: blankHours(), note: "" });
     setMyHours(blankHours());
@@ -582,6 +586,20 @@ export default function App() {
                     </div>
                   </div>
 
+                  <div style={styles.modeRow}>
+                    <button
+                      style={styles.pillButton(false, GREEN, GREEN_BG)}
+                      onClick={() => fillWholeDay("free")}
+                    >
+                      Prost cel dan
+                    </button>
+                    <button
+                      style={styles.pillButton(false, RED, RED_BG)}
+                      onClick={() => fillWholeDay("busy")}
+                    >
+                      Zaseden cel dan
+                    </button>
+                  </div>
                   <div style={styles.modeRow}>
                     <button
                       style={styles.pillButton(paintMode === "free", GREEN, GREEN_BG)}
@@ -873,6 +891,20 @@ export default function App() {
                         </div>
                       </div>
 
+                      <div style={styles.modeRow}>
+                        <button
+                          style={styles.pillButton(false, GREEN, GREEN_BG)}
+                          onClick={() => fillWholeDay("free")}
+                        >
+                          Prost cel dan
+                        </button>
+                        <button
+                          style={styles.pillButton(false, RED, RED_BG)}
+                          onClick={() => fillWholeDay("busy")}
+                        >
+                          Zaseden cel dan
+                        </button>
+                      </div>
                       <div style={styles.modeRow}>
                         <button
                           style={styles.pillButton(paintMode === "free", GREEN, GREEN_BG)}
