@@ -170,6 +170,7 @@ export default function App() {
 
   const gridRef = useRef(null);
   const dragActionRef = useRef("set");
+  const hasAutoOpenedRef = useRef(false);
   const isDesktop = useIsDesktop();
 
   useEffect(() => {
@@ -234,10 +235,11 @@ export default function App() {
   }, [name, days, loadAllData]);
 
   useEffect(() => {
-    if (days.length && openDay == null) {
+    if (days.length && !hasAutoOpenedRef.current) {
+      hasAutoOpenedRef.current = true;
       setOpenDay(isoDate(days[0]));
     }
-  }, [days, openDay]);
+  }, [days]);
 
   async function saveName(n) {
     const trimmed = n.trim();
