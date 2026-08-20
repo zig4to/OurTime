@@ -220,6 +220,35 @@ function decodeEntry(raw) {
   return { hours: decodeHours(raw.slice(0, sep)), note };
 }
 
+// The Supabase RLS policies (see supabase-schema.sql) only grant access to
+// keys matching "avail:%", so the single group event per day piggybacks on
+// that same prefix using a reserved "person" segment that can never collide
+// with a real "Ime Priimek" identity (real names always contain a space).
+const EVENT_MARKER = "__event__";
+
+function eventKey(iso) {
+  return `avail:${iso}:${EVENT_MARKER}`;
+}
+
+function encodeEvent(ev) {
+  return JSON.stringify(ev);
+}
+
+function decodeEvent(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      title: parsed.title || "",
+      description: parsed.description || "",
+      duration: parsed.duration || "",
+      createdBy: parsed.createdBy || "",
+      attendees: Array.isArray(parsed.attendees) ? parsed.attendees : [],
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 // Short inline summary shown next to a person's name, e.g. "danes prost".
 function quickStatusText(hours, dayLabelText) {
   const anySet = hours.some((h) => h !== null);
@@ -330,6 +359,11 @@ export default function App() {
   const [viewPerson, setViewPerson] = useState(null); // { name, hours, iso, dateText }
   const [theme, setTheme] = useState("light");
   const [showSettings, setShowSettings] = useState(false);
+  const [dayEvents, setDayEvents] = useState({}); // { iso: { title, description, duration, createdBy, attendees } }
+  const [editingEvent, setEditingEvent] = useState(null); // iso of the day whose event form is open, or null
+  const [eventTitleDraft, setEventTitleDraft] = useState("");
+  const [eventDescDraft, setEventDescDraft] = useState("");
+  const [eventDurationDraft, setEventDurationDraft] = useState("");
 
   const gridRef = useRef(null);
   const dragActionRef = useRef("set");
@@ -406,14 +440,21 @@ export default function App() {
       const toKey = `avail:${addDays(days[days.length - 1], 1)}`;
       const res = await window.storage.range(fromKey, toKey, true);
       const result = {};
+      const events = {};
       for (const iso of days) result[iso] = {};
       for (const row of (res && res.rows) || []) {
         const iso = isoFromKey(row.key);
         const person = personFromKey(row.key);
         if (!person || !(iso in result)) continue;
+        if (person === EVENT_MARKER) {
+          const ev = decodeEvent(row.value);
+          if (ev) events[iso] = ev;
+          continue;
+        }
         result[iso][person] = decodeEntry(row.value);
       }
       setDayData(result);
+      setDayEvents(events);
       setError(null);
     } catch (e) {
       setError("Podatkov ni bilo mogoče naložiti. Poskusi znova.");
@@ -634,6 +675,73 @@ export default function App() {
     setEditingDay(null);
     setEditingPerson(null);
     setSaved(false);
+  }
+
+  function startEditingEvent(iso) {
+    const existing = dayEvents[iso];
+    setEventTitleDraft(existing?.title || "");
+    setEventDescDraft(existing?.description || "");
+    setEventDurationDraft(existing?.duration || "");
+    setEditingEvent(iso);
+  }
+
+  function cancelEditingEvent() {
+    setEditingEvent(null);
+  }
+
+  async function saveEvent(iso) {
+    const title = eventTitleDraft.trim();
+    if (!title || !name) return;
+    const existing = dayEvents[iso];
+    const event = {
+      title,
+      description: eventDescDraft.trim(),
+      duration: eventDurationDraft.trim(),
+      createdBy: existing?.createdBy || name,
+      attendees: existing?.attendees || [],
+    };
+    setDayEvents((prev) => ({ ...prev, [iso]: event }));
+    setEditingEvent(null);
+    try {
+      await window.storage.set(eventKey(iso), encodeEvent(event), true);
+    } catch (e) {
+      setError("Dogodka ni bilo mogoče shraniti. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
+  async function deleteEvent(iso) {
+    setDayEvents((prev) => {
+      const next = { ...prev };
+      delete next[iso];
+      return next;
+    });
+    setEditingEvent(null);
+    try {
+      await window.storage.delete(eventKey(iso), true);
+    } catch (e) {
+      setError("Dogodka ni bilo mogoče izbrisati. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
+  async function toggleAttendance(iso) {
+    const existing = dayEvents[iso];
+    if (!existing || !name) return;
+    const attending = existing.attendees.includes(name);
+    const nextEvent = {
+      ...existing,
+      attendees: attending
+        ? existing.attendees.filter((n) => n !== name)
+        : [...existing.attendees, name],
+    };
+    setDayEvents((prev) => ({ ...prev, [iso]: nextEvent }));
+    try {
+      await window.storage.set(eventKey(iso), encodeEvent(nextEvent), true);
+    } catch (e) {
+      setError("Ni bilo mogoče shraniti udeležbe. Poskusi znova.");
+      loadAllData();
+    }
   }
 
   if (loading) {
@@ -936,6 +1044,112 @@ export default function App() {
     </div>
   );
 
+  // Shared between the mobile and desktop day-detail views: the one group
+  // event a day can have, or the form to create/edit it. Only the creator
+  // can edit or delete; anyone can toggle their own attendance.
+  function renderEventSection(iso) {
+    if (editingEvent === iso) {
+      const existing = dayEvents[iso];
+      return (
+        <div style={styles.eventCard}>
+          <div style={styles.eventEyebrow}>Dogodek</div>
+          <input
+            autoFocus
+            style={styles.input}
+            placeholder="Ime dogodka"
+            value={eventTitleDraft}
+            onChange={(e) => setEventTitleDraft(e.target.value)}
+          />
+          <textarea
+            style={styles.noteTextarea}
+            rows={2}
+            placeholder="Opis dogodka"
+            value={eventDescDraft}
+            onChange={(e) => setEventDescDraft(e.target.value)}
+          />
+          <input
+            style={styles.input}
+            placeholder="Trajanje dogodka (npr. 18:00–20:00)"
+            value={eventDurationDraft}
+            onChange={(e) => setEventDurationDraft(e.target.value)}
+          />
+          <div style={styles.editActionsRow}>
+            <button style={styles.cancelButton} onClick={cancelEditingEvent}>
+              Prekliči
+            </button>
+            <button
+              style={{
+                ...styles.saveButton(false),
+                opacity: eventTitleDraft.trim() ? 1 : 0.5,
+              }}
+              disabled={!eventTitleDraft.trim()}
+              onClick={() => saveEvent(iso)}
+            >
+              Dodaj
+            </button>
+          </div>
+          {existing && existing.createdBy === name && (
+            <button style={styles.deleteButton} onClick={() => deleteEvent(iso)}>
+              <Trash2 size={12} /> Izbriši dogodek
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    const event = dayEvents[iso];
+    if (!event) {
+      return (
+        <button style={styles.addEventButton} onClick={() => startEditingEvent(iso)}>
+          + Dodaj dogodek
+        </button>
+      );
+    }
+
+    const attending = !!name && event.attendees.includes(name);
+    const canEdit = event.createdBy === name;
+    return (
+      <div style={styles.eventCard}>
+        <div style={styles.eventHeaderRow}>
+          <div>
+            <div style={styles.eventEyebrow}>Dogodek</div>
+            <div style={styles.eventTitle}>{event.title}</div>
+            {event.duration && (
+              <div style={styles.eventDuration}>{event.duration}</div>
+            )}
+          </div>
+          {canEdit && (
+            <button
+              style={styles.editEntryButton}
+              onClick={() => startEditingEvent(iso)}
+              aria-label="Uredi dogodek"
+            >
+              <Pencil size={13} />
+            </button>
+          )}
+        </div>
+        {event.description && (
+          <p style={styles.eventDescription}>{event.description}</p>
+        )}
+        <button
+          style={styles.attendButton(attending)}
+          onClick={() => toggleAttendance(iso)}
+        >
+          {attending ? "Prideš ✓" : "Da"}
+        </button>
+        {event.attendees.length > 0 && (
+          <div style={styles.eventAttendees}>
+            {event.attendees.map((n) => (
+              <span key={n} style={styles.avatarChip(GREEN)}>
+                {initials(n)}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (isDesktop) {
     const iso = openDay || today || null;
     const selectedIso = days.includes(iso) ? iso : today;
@@ -1159,6 +1373,8 @@ export default function App() {
               ) : (
                 <>
                   {saved && <div style={styles.savedFlash}>Shranjeno ✓</div>}
+
+                  {renderEventSection(iso)}
 
                   {allEntries.length === 0 ? (
                     <div style={styles.emptyState}>
@@ -1481,6 +1697,8 @@ export default function App() {
                       {saved && (
                         <div style={styles.savedFlash}>Shranjeno ✓</div>
                       )}
+
+                      {renderEventSection(iso)}
 
                       {allEntries.length === 0 ? (
                         <div style={styles.emptyState}>
@@ -2087,6 +2305,82 @@ const styles = {
     paddingTop: 12,
     display: "flex",
     flexDirection: "column",
+    gap: 6,
+  },
+  addEventButton: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "10px",
+    marginBottom: 14,
+    fontSize: 13,
+    fontWeight: 700,
+    color: GREEN,
+    background: GREEN_BG,
+    border: `1.5px dashed ${GREEN}`,
+    borderRadius: 10,
+    cursor: "pointer",
+  },
+  eventCard: {
+    background: GREEN_BG,
+    border: `1px solid ${GREEN}`,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  eventHeaderRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  eventEyebrow: {
+    fontSize: 10.5,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    color: GREEN,
+  },
+  eventTitle: {
+    fontSize: 15,
+    fontWeight: 800,
+    color: "var(--text-heading)",
+    marginTop: 2,
+  },
+  eventDuration: {
+    fontSize: 12,
+    color: "var(--text-secondary)",
+    marginTop: 2,
+  },
+  eventDescription: {
+    fontSize: 13,
+    color: "var(--text-strong)",
+    lineHeight: 1.4,
+    margin: 0,
+  },
+  attendButton: (active) => ({
+    alignSelf: "flex-start",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 16px",
+    fontSize: 13,
+    fontWeight: 700,
+    color: active ? "#fff" : GREEN,
+    background: active ? GREEN : "var(--card-bg)",
+    border: `1.5px solid ${GREEN}`,
+    borderRadius: 9,
+    cursor: "pointer",
+  }),
+  eventAttendees: {
+    display: "flex",
+    flexWrap: "wrap",
     gap: 6,
   },
   entryRow: {
