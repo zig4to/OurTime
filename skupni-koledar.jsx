@@ -496,7 +496,8 @@ export default function App() {
                 <span style={styles.headerAccent}>
                   {capitalize(name.split(" ")[0])}
                 </span>
-                , kdaj maš <span style={styles.headerAccent}>cajt</span>?
+                , kdaj maš{" "}
+                <span style={styles.headerAccentCaps}>cajt</span>?
               </h1>
             </div>
             <button
@@ -811,7 +812,8 @@ export default function App() {
             <span style={styles.headerAccent}>
               {capitalize(name.split(" ")[0])}
             </span>
-            , kdaj maš <span style={styles.headerAccent}>cajt</span>?
+            , kdaj maš{" "}
+            <span style={styles.headerAccentCaps}>cajt</span>?
           </h1>
         </div>
         <button
@@ -1250,7 +1252,12 @@ const styles = {
   },
   headerAccent: {
     color: GREEN,
-    fontWeight: 700,
+    fontWeight: 800,
+  },
+  headerAccentCaps: {
+    color: GREEN,
+    fontWeight: 800,
+    textTransform: "uppercase",
   },
   avatarButton: {
     position: "relative",
