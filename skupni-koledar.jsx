@@ -1722,11 +1722,14 @@ const styles = {
   },
   editNameRow: {
     display: "flex",
+    flexWrap: "wrap",
     gap: 8,
     padding: "0 20px 8px 20px",
   },
   inputSmall: {
-    flex: 1,
+    flex: "1 1 120px",
+    minWidth: 0,
+    boxSizing: "border-box",
     padding: "9px 12px",
     fontSize: 14,
     borderRadius: 10,
