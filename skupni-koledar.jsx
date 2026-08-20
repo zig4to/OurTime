@@ -1,13 +1,81 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Users, ChevronRight, Pencil, Eraser, Trash2, MessageSquare } from "lucide-react";
+import {
+  Users,
+  ChevronRight,
+  Pencil,
+  Eraser,
+  Trash2,
+  MessageSquare,
+  Settings,
+  Sun,
+  Moon,
+} from "lucide-react";
 
-const GREEN = "#2F6F5E";
-const GREEN_BG = "#E4F1EC";
-const ORANGE = "#C6862F";
-const RED = "#B4482F";
-const RED_BG = "#F7E9E4";
-const NEUTRAL_BG = "#F1F0EA";
-const NEUTRAL_TEXT = "#AEB4AC";
+// Accent colors and every neutral/text/border/background color in the
+// `styles` object below are CSS custom properties, not literal hex values,
+// so the whole app re-themes just by swapping which :root[data-theme=...]
+// block is active (see THEME_CSS / applyTheme) -- no per-render style
+// recomputation needed.
+const GREEN = "var(--green)";
+const GREEN_BG = "var(--green-bg)";
+const ORANGE = "var(--orange)";
+const RED = "var(--red)";
+const RED_BG = "var(--red-bg)";
+const NEUTRAL_BG = "var(--divider)";
+const NEUTRAL_TEXT = "var(--neutral-text)";
+
+const THEME_CSS = `
+  :root[data-theme="light"] {
+    --bg: #FAF9F6;
+    --card-bg: #FFFFFF;
+    --input-bg: #FDFCFA;
+    --text: #233029;
+    --text-heading: #1B2E24;
+    --text-strong: #374840;
+    --text-secondary: #5B6862;
+    --text-muted: #8A9A91;
+    --text-faint: #9AA5A0;
+    --text-note: #7C8A83;
+    --text-fainter: #B3BBB5;
+    --neutral-text: #AEB4AC;
+    --surface-strong: #1B2E24;
+    --border: #EEEDE7;
+    --border-input: #E3E1D9;
+    --divider: #F1F0EA;
+    --divider-soft: #F5F4EF;
+    --avatar-border: #CFE4DA;
+    --green: #2F6F5E;
+    --green-bg: #E4F1EC;
+    --red: #B4482F;
+    --red-bg: #F7E9E4;
+    --orange: #C6862F;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181A;
+    --card-bg: #1D2321;
+    --input-bg: #191F1D;
+    --text: #E7EBE6;
+    --text-heading: #F4F6F2;
+    --text-strong: #D6DDD6;
+    --text-secondary: #A6B0A9;
+    --text-muted: #8A968E;
+    --text-faint: #7C8983;
+    --text-note: #93A099;
+    --text-fainter: #63706A;
+    --neutral-text: #57635D;
+    --surface-strong: #2E3733;
+    --border: #2A302E;
+    --border-input: #3A423E;
+    --divider: #262C2A;
+    --divider-soft: #232928;
+    --avatar-border: #34443C;
+    --green: #4FA88E;
+    --green-bg: #1D2E28;
+    --red: #E0805F;
+    --red-bg: #34211C;
+    --orange: #E0A855;
+  }
+`;
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const AUTH_CODE = "122333";
@@ -256,6 +324,8 @@ export default function App() {
   const [editingDay, setEditingDay] = useState(null); // iso of the day currently being edited, or null
   const [editingPerson, setEditingPerson] = useState(null); // whose entry editingDay refers to (admin can edit anyone's)
   const [viewPerson, setViewPerson] = useState(null); // { name, hours, iso, dateText }
+  const [theme, setTheme] = useState("light");
+  const [showSettings, setShowSettings] = useState(false);
 
   const gridRef = useRef(null);
   const dragActionRef = useRef("set");
@@ -266,6 +336,39 @@ export default function App() {
     const start = todayIso();
     setDays(Array.from({ length: 14 }, (_, i) => addDays(start, i)));
   }, []);
+
+  useEffect(() => {
+    const styleEl = document.createElement("style");
+    styleEl.textContent = THEME_CSS;
+    document.head.appendChild(styleEl);
+    return () => styleEl.remove();
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await window.storage.get("theme", false);
+        if (res && (res.value === "light" || res.value === "dark")) {
+          setTheme(res.value);
+        }
+      } catch (e) {
+        console.info("No saved theme yet:", e?.message || e);
+      }
+    })();
+  }, []);
+
+  async function chooseTheme(next) {
+    setTheme(next);
+    try {
+      await window.storage.set("theme", next, false);
+    } catch (e) {
+      console.error("theme save error:", e);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -782,6 +885,45 @@ export default function App() {
     </div>
   );
 
+  const settingsButton = (
+    <button style={styles.settingsButton} onClick={() => setShowSettings(true)}>
+      <Settings size={14} /> Nastavitve
+    </button>
+  );
+
+  const settingsModal = showSettings && (
+    <div style={styles.modalOverlay} onClick={() => setShowSettings(false)}>
+      <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <div>
+            <div style={styles.modalEyebrow}>Nastavitve</div>
+            <div style={styles.modalTitle}>Tema</div>
+          </div>
+          <button style={styles.modalClose} onClick={() => setShowSettings(false)}>
+            Zapri
+          </button>
+        </div>
+        <p style={styles.introText}>
+          Izberi videz aplikacije. Izbira se shrani za naslednjič.
+        </p>
+        <div style={styles.modeRow}>
+          <button
+            style={styles.themeOptionButton(theme === "light")}
+            onClick={() => chooseTheme("light")}
+          >
+            <Sun size={16} /> Svetla
+          </button>
+          <button
+            style={styles.themeOptionButton(theme === "dark")}
+            onClick={() => chooseTheme("dark")}
+          >
+            <Moon size={16} /> Temna
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (isDesktop) {
     const iso = openDay || today || null;
     const selectedIso = days.includes(iso) ? iso : today;
@@ -1062,7 +1204,7 @@ export default function App() {
                                 <span style={styles.entryNoteText}>{e.note}</span>
                               )}
                             </span>
-                            <ChevronRight size={15} color="#B3BBB5" />
+                            <ChevronRight size={15} color="var(--text-fainter)" />
                           </button>
                           {(n === name || isAdmin) && (
                             <button
@@ -1084,12 +1226,14 @@ export default function App() {
           </div>
 
           <div style={styles.footer}>
-            <Users size={13} color="#9AA5A0" />
+            <Users size={13} color="var(--text-faint)" />
             <span>Koledar si delijo vsi, ki odprejo to povezavo</span>
           </div>
+          {settingsButton}
         </div>
 
         {viewPersonModal}
+        {settingsModal}
       </div>
     );
   }
@@ -1166,7 +1310,7 @@ export default function App() {
                 </div>
                 <ChevronRight
                   size={18}
-                  color="#9AA5A0"
+                  color="var(--text-faint)"
                   style={{
                     transform: isOpen ? "rotate(90deg)" : "none",
                     transition: "transform 150ms ease",
@@ -1377,7 +1521,7 @@ export default function App() {
                                     <span style={styles.entryNoteText}>{e.note}</span>
                                   )}
                                 </span>
-                                <ChevronRight size={15} color="#B3BBB5" />
+                                <ChevronRight size={15} color="var(--text-fainter)" />
                               </button>
                               {(n === name || isAdmin) && (
                                 <button
@@ -1411,11 +1555,13 @@ export default function App() {
       </div>
 
       <div style={styles.footer}>
-        <Users size={13} color="#9AA5A0" />
+        <Users size={13} color="var(--text-faint)" />
         <span>Koledar si delijo vsi, ki odprejo to povezavo</span>
       </div>
+      {settingsButton}
 
       {viewPersonModal}
+      {settingsModal}
     </div>
   );
 }
@@ -1423,10 +1569,10 @@ export default function App() {
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#FAF9F6",
+    background: "var(--bg)",
     fontFamily:
       "'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif",
-    color: "#233029",
+    color: "var(--text)",
     paddingBottom: 40,
   },
   centerScreen: {
@@ -1434,7 +1580,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "#FAF9F6",
+    background: "var(--bg)",
     fontFamily:
       "'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif",
     padding: 20,
@@ -1448,17 +1594,17 @@ const styles = {
   introCard: {
     width: "100%",
     maxWidth: 360,
-    background: "#FFFFFF",
+    background: "var(--card-bg)",
     borderRadius: 20,
     padding: "32px 28px",
     boxShadow: "0 1px 3px rgba(35,48,41,0.08), 0 8px 24px rgba(35,48,41,0.06)",
-    border: "1px solid #EEEDE7",
+    border: "1px solid var(--border)",
   },
   introEyebrow: {
     fontSize: 11,
     letterSpacing: "0.14em",
     textTransform: "uppercase",
-    color: "#8A9A91",
+    color: "var(--text-muted)",
     fontWeight: 700,
     marginBottom: 8,
   },
@@ -1466,12 +1612,12 @@ const styles = {
     fontSize: 26,
     fontWeight: 800,
     margin: "0 0 8px 0",
-    color: "#1B2E24",
+    color: "var(--text-heading)",
   },
   introText: {
     fontSize: 14.5,
     lineHeight: 1.5,
-    color: "#5B6862",
+    color: "var(--text-secondary)",
     margin: "0 0 22px 0",
   },
   input: {
@@ -1480,10 +1626,10 @@ const styles = {
     padding: "13px 14px",
     fontSize: 16,
     borderRadius: 12,
-    border: "1.5px solid #E3E1D9",
+    border: "1.5px solid var(--border-input)",
     outline: "none",
     marginBottom: 14,
-    background: "#FDFCFA",
+    background: "var(--input-bg)",
   },
   primaryButton: {
     width: "100%",
@@ -1506,9 +1652,9 @@ const styles = {
     padding: "13px 14px",
     fontSize: 14.5,
     fontWeight: 600,
-    color: "#5B6862",
+    color: "var(--text-secondary)",
     background: "transparent",
-    border: "1.5px solid #E3E1D9",
+    border: "1.5px solid var(--border-input)",
     borderRadius: 12,
     cursor: "pointer",
   },
@@ -1522,7 +1668,7 @@ const styles = {
     fontSize: 11,
     letterSpacing: "0.14em",
     textTransform: "uppercase",
-    color: "#8A9A91",
+    color: "var(--text-muted)",
     fontWeight: 700,
     marginBottom: 10,
   },
@@ -1530,7 +1676,7 @@ const styles = {
     fontSize: 19,
     fontWeight: 500,
     margin: 0,
-    color: "#1B2E24",
+    color: "var(--text-heading)",
   },
   headerAccent: {
     color: GREEN,
@@ -1543,7 +1689,7 @@ const styles = {
     borderRadius: "50%",
     background: GREEN_BG,
     color: GREEN,
-    border: "1px solid #CFE4DA",
+    border: "1px solid var(--avatar-border)",
     fontWeight: 700,
     fontSize: 14,
     cursor: "pointer",
@@ -1555,10 +1701,10 @@ const styles = {
     position: "absolute",
     bottom: -2,
     right: -2,
-    background: "#FAF9F6",
+    background: "var(--bg)",
     borderRadius: "50%",
     padding: 2,
-    color: "#5B6862",
+    color: "var(--text-secondary)",
   },
   editNameRow: {
     display: "flex",
@@ -1570,7 +1716,7 @@ const styles = {
     padding: "9px 12px",
     fontSize: 14,
     borderRadius: 10,
-    border: "1.5px solid #E3E1D9",
+    border: "1.5px solid var(--border-input)",
     outline: "none",
   },
   smallButton: {
@@ -1593,9 +1739,9 @@ const styles = {
     padding: "9px 14px",
     fontSize: 13.5,
     fontWeight: 600,
-    color: "#5B6862",
+    color: "var(--text-secondary)",
     background: "transparent",
-    border: "1.5px solid #E3E1D9",
+    border: "1.5px solid var(--border-input)",
     borderRadius: 10,
     cursor: "pointer",
   },
@@ -1623,7 +1769,7 @@ const styles = {
   },
   syncLabel: {
     fontSize: 11.5,
-    color: "#9AA5A0",
+    color: "var(--text-faint)",
     fontStyle: "italic",
   },
   list: {
@@ -1633,9 +1779,9 @@ const styles = {
     padding: "0 16px",
   },
   dayCard: (isToday) => ({
-    background: "#FFFFFF",
+    background: "var(--card-bg)",
     borderRadius: 16,
-    border: isToday ? `1.5px solid ${GREEN}` : "1px solid #EEEDE7",
+    border: isToday ? `1.5px solid ${GREEN}` : "1px solid var(--border)",
     boxShadow: isToday ? `0 0 0 3px ${GREEN_BG}` : "none",
     overflow: "hidden",
   }),
@@ -1658,12 +1804,12 @@ const styles = {
   dayNum: {
     fontSize: 20,
     fontWeight: 800,
-    color: "#1B2E24",
+    color: "var(--text-heading)",
     lineHeight: 1.1,
   },
   dayName: {
     fontSize: 12.5,
-    color: "#8A9A91",
+    color: "var(--text-muted)",
     textTransform: "capitalize",
     fontWeight: 600,
   },
@@ -1676,12 +1822,12 @@ const styles = {
   },
   noOne: {
     fontSize: 12.5,
-    color: "#B3BBB5",
+    color: "var(--text-fainter)",
     fontStyle: "italic",
   },
   emptyNote: {
     fontSize: 13,
-    color: "#B3BBB5",
+    color: "var(--text-fainter)",
     fontStyle: "italic",
   },
   avatarChip: (color) => ({
@@ -1697,7 +1843,7 @@ const styles = {
     justifyContent: "center",
   }),
   dayDetail: {
-    borderTop: "1px solid #F1F0EA",
+    borderTop: "1px solid var(--divider)",
     padding: "14px",
   },
   gridHeaderRow: {
@@ -1709,7 +1855,7 @@ const styles = {
   sectionLabel: {
     fontSize: 11.5,
     fontWeight: 700,
-    color: "#8A9A91",
+    color: "var(--text-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
   },
@@ -1719,9 +1865,9 @@ const styles = {
     gap: 4,
     fontSize: 11.5,
     fontWeight: 600,
-    color: "#8A9A91",
+    color: "var(--text-muted)",
     background: "transparent",
-    border: "1px solid #E3E1D9",
+    border: "1px solid var(--border-input)",
     borderRadius: 7,
     padding: "4px 8px",
     cursor: "pointer",
@@ -1761,7 +1907,7 @@ const styles = {
   }),
   hint: {
     fontSize: 11.5,
-    color: "#9AA5A0",
+    color: "var(--text-faint)",
     margin: "0 0 10px 0",
     lineHeight: 1.4,
   },
@@ -1793,10 +1939,10 @@ const styles = {
     fontSize: 13.5,
     fontFamily: "inherit",
     borderRadius: 10,
-    border: "1.5px solid #E3E1D9",
+    border: "1.5px solid var(--border-input)",
     outline: "none",
-    background: "#FDFCFA",
-    color: "#233029",
+    background: "var(--input-bg)",
+    color: "var(--text)",
   },
   noteRemoveButton: {
     alignSelf: "flex-start",
@@ -1832,7 +1978,7 @@ const styles = {
     fontSize: 13.5,
     fontWeight: 700,
     color: "#fff",
-    background: saved ? GREEN : "#1B2E24",
+    background: saved ? GREEN : "var(--surface-strong)",
     border: "none",
     borderRadius: 10,
     cursor: "pointer",
@@ -1848,9 +1994,9 @@ const styles = {
     padding: "11px",
     fontSize: 13.5,
     fontWeight: 700,
-    color: "#5B6862",
+    color: "var(--text-secondary)",
     background: "transparent",
-    border: "1.5px solid #E3E1D9",
+    border: "1.5px solid var(--border-input)",
     borderRadius: 10,
     cursor: "pointer",
   },
@@ -1870,7 +2016,7 @@ const styles = {
   },
   emptyStateText: {
     fontSize: 13.5,
-    color: "#8A9A91",
+    color: "var(--text-muted)",
     margin: "0 0 12px 0",
   },
   addButton: {
@@ -1878,7 +2024,7 @@ const styles = {
     fontSize: 13.5,
     fontWeight: 700,
     color: "#fff",
-    background: "#1B2E24",
+    background: "var(--surface-strong)",
     border: "none",
     borderRadius: 10,
     cursor: "pointer",
@@ -1896,7 +2042,7 @@ const styles = {
     cursor: "pointer",
   },
   peopleSection: {
-    borderTop: "1px solid #F1F0EA",
+    borderTop: "1px solid var(--divider)",
     paddingTop: 12,
     display: "flex",
     flexDirection: "column",
@@ -1911,7 +2057,7 @@ const styles = {
     padding: "9px 4px",
     background: "transparent",
     border: "none",
-    borderBottom: "1px solid #F5F4EF",
+    borderBottom: "1px solid var(--divider-soft)",
     cursor: "pointer",
     textAlign: "left",
   },
@@ -1950,11 +2096,11 @@ const styles = {
   entryName: {
     fontSize: 14,
     fontWeight: 600,
-    color: "#374840",
+    color: "var(--text-strong)",
   },
   entryNoteText: {
     fontSize: 12,
-    color: "#7C8A83",
+    color: "var(--text-note)",
     fontStyle: "italic",
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -1963,12 +2109,12 @@ const styles = {
   entryYou: {
     fontSize: 12,
     fontWeight: 500,
-    color: "#9AA5A0",
+    color: "var(--text-faint)",
   },
   entryQuickStatus: {
     fontSize: 12,
     fontWeight: 500,
-    color: "#7C8A83",
+    color: "var(--text-note)",
   },
   modalOverlay: {
     position: "fixed",
@@ -1982,7 +2128,7 @@ const styles = {
   modalCard: {
     width: "100%",
     maxWidth: 420,
-    background: "#fff",
+    background: "var(--card-bg)",
     borderRadius: "18px 18px 0 0",
     padding: "18px 20px 26px 20px",
     maxHeight: "78vh",
@@ -1998,7 +2144,7 @@ const styles = {
   modalEyebrow: {
     fontSize: 11,
     fontWeight: 700,
-    color: "#8A9A91",
+    color: "var(--text-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     marginBottom: 2,
@@ -2006,19 +2152,19 @@ const styles = {
   modalTitle: {
     fontSize: 19,
     fontWeight: 800,
-    color: "#1B2E24",
+    color: "var(--text-heading)",
   },
   modalNote: {
     fontSize: 13,
-    color: "#5B6862",
+    color: "var(--text-secondary)",
     fontStyle: "italic",
     marginTop: 4,
   },
   modalClose: {
     fontSize: 12.5,
     fontWeight: 700,
-    color: "#5B6862",
-    background: "#F1F0EA",
+    color: "var(--text-secondary)",
+    background: "var(--divider)",
     border: "none",
     borderRadius: 8,
     padding: "7px 12px",
@@ -2035,13 +2181,13 @@ const styles = {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "8px 10px",
-    background: "#FAF9F6",
+    background: "var(--bg)",
     borderRadius: 9,
   },
   modalTime: {
     fontSize: 14,
     fontWeight: 700,
-    color: "#233029",
+    color: "var(--text)",
   },
   modalBadge: {
     fontSize: 12,
@@ -2063,7 +2209,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     fontSize: 10.5,
-    color: "#B3BBB5",
+    color: "var(--text-fainter)",
   },
   footer: {
     display: "flex",
@@ -2072,14 +2218,44 @@ const styles = {
     gap: 6,
     marginTop: 24,
     fontSize: 12,
-    color: "#9AA5A0",
+    color: "var(--text-faint)",
   },
+  settingsButton: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    margin: "16px auto 0 auto",
+    padding: "9px 16px",
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+    background: "var(--card-bg)",
+    border: "1px solid var(--border)",
+    borderRadius: 10,
+    cursor: "pointer",
+  },
+  themeOptionButton: (active) => ({
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: "11px 6px",
+    fontSize: 13.5,
+    fontWeight: 700,
+    color: active ? "#fff" : GREEN,
+    background: active ? GREEN : GREEN_BG,
+    border: `1.5px solid ${GREEN}`,
+    borderRadius: 9,
+    cursor: "pointer",
+  }),
   pageDesktop: {
     minHeight: "100vh",
-    background: "#FAF9F6",
+    background: "var(--bg)",
     fontFamily:
       "'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif",
-    color: "#233029",
+    color: "var(--text)",
     paddingBottom: 40,
   },
   desktopContainer: {
@@ -2108,21 +2284,21 @@ const styles = {
     justifyContent: "center",
     gap: 2,
     borderRadius: 9,
-    border: selected || isToday ? `1.5px solid ${GREEN}` : "1px solid #EEEDE7",
+    border: selected || isToday ? `1.5px solid ${GREEN}` : "1px solid var(--border)",
     boxShadow: !selected && isToday ? `0 0 0 3px ${GREEN_BG}` : "none",
-    background: selected ? GREEN_BG : "#FFFFFF",
+    background: selected ? GREEN_BG : "var(--card-bg)",
     cursor: "pointer",
     padding: 2,
   }),
   daySquareNum: {
     fontSize: 14.5,
     fontWeight: 800,
-    color: "#1B2E24",
+    color: "var(--text-heading)",
     lineHeight: 1.1,
   },
   daySquareLabel: {
     fontSize: 11,
-    color: "#8A9A91",
+    color: "var(--text-muted)",
     textTransform: "capitalize",
     fontWeight: 600,
   },
@@ -2141,9 +2317,9 @@ const styles = {
   }),
   detailPanel: {
     flex: 1,
-    background: "#FFFFFF",
+    background: "var(--card-bg)",
     borderRadius: 16,
-    border: "1px solid #EEEDE7",
+    border: "1px solid var(--border)",
     padding: 20,
     minHeight: 380,
   },
@@ -2153,17 +2329,17 @@ const styles = {
     justifyContent: "space-between",
     marginBottom: 16,
     paddingBottom: 14,
-    borderBottom: "1px solid #F1F0EA",
+    borderBottom: "1px solid var(--divider)",
   },
   detailDateNum: {
     fontSize: 24,
     fontWeight: 800,
-    color: "#1B2E24",
+    color: "var(--text-heading)",
     lineHeight: 1.1,
   },
   detailDateLabel: {
     fontSize: 12.5,
-    color: "#8A9A91",
+    color: "var(--text-muted)",
     textTransform: "capitalize",
     fontWeight: 600,
   },
