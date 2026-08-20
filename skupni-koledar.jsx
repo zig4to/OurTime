@@ -10,19 +10,47 @@ const NEUTRAL_TEXT = "#AEB4AC";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const AUTH_CODE = "122333";
+const TIME_ZONE = "Europe/Ljubljana";
 
-function isoDate(d) {
-  return d.toISOString().slice(0, 10);
+// Days are plain "YYYY-MM-DD" strings anchored to Ljubljana rather than Date
+// objects in the viewer's timezone. The druženje happens in Ljubljana, so
+// "Danes" has to mean today *there* even if someone opens this from abroad --
+// and calendar-date strings can't drift the way timestamps can.
+const ljubljanaParts = new Intl.DateTimeFormat("en-CA", {
+  timeZone: TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function todayIso() {
+  const parts = ljubljanaParts.formatToParts(new Date());
+  const part = (type) => parts.find((p) => p.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
-function dayLabel(d, today) {
-  const days = ["ned", "pon", "tor", "sre", "čet", "pet", "sob"];
-  const sameDay = isoDate(d) === isoDate(today);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  if (sameDay) return "Danes";
-  if (isoDate(d) === isoDate(tomorrow)) return "Jutri";
-  return days[d.getDay()];
+// Date maths is done at UTC midnight so Ljubljana's DST switch (where a local
+// day is 23 or 25 hours long) can never add or drop a day.
+function utcFromIso(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+function addDays(iso, n) {
+  const dt = utcFromIso(iso);
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+
+function dayNumber(iso) {
+  return Number(iso.slice(8, 10));
+}
+
+function dayLabel(iso, today) {
+  const names = ["ned", "pon", "tor", "sre", "čet", "pet", "sob"];
+  if (iso === today) return "Danes";
+  if (iso === addDays(today, 1)) return "Jutri";
+  return names[utcFromIso(iso).getUTCDay()];
 }
 
 function initials(name) {
@@ -36,6 +64,34 @@ function initials(name) {
 
 function capitalize(word) {
   return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+// The full "Ime Priimek" string is the identity, so it gets normalised on the
+// way in: without this, "tina brdnik" and "Tina Brdnik" would become two
+// different people with two separate sets of entries.
+function normalizeName(first, last) {
+  const clean = (s) => (s || "").trim().replace(/\s+/g, " ");
+  return `${capitalize(clean(first))} ${capitalize(clean(last))}`.trim();
+}
+
+function splitName(full) {
+  const parts = (full || "").trim().split(/\s+/).filter(Boolean);
+  return { first: parts[0] || "", last: parts.slice(1).join(" ") };
+}
+
+function hasSurname(full) {
+  return (full || "").trim().split(/\s+/).filter(Boolean).length >= 2;
+}
+
+// Keys look like "avail:2026-08-20:Ime Priimek"; everything past the second
+// colon is the person, so names containing a colon survive the round trip.
+function personFromKey(key) {
+  const parts = key.split(":");
+  return parts.length >= 3 ? parts.slice(2).join(":") : null;
+}
+
+function isoFromKey(key) {
+  return key.split(":")[1] || null;
 }
 
 function blankHours() {
@@ -164,8 +220,12 @@ function useIsDesktop(breakpoint = 860) {
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState(null);
-  const [nameDraft, setNameDraft] = useState("");
+  const [firstDraft, setFirstDraft] = useState("");
+  const [lastDraft, setLastDraft] = useState("");
   const [editingName, setEditingName] = useState(false);
+  const [needsSurname, setNeedsSurname] = useState(false);
+  const [duplicateName, setDuplicateName] = useState(null);
+  const [checkingName, setCheckingName] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [pinDraft, setPinDraft] = useState("");
   const [authError, setAuthError] = useState(false);
@@ -189,22 +249,23 @@ export default function App() {
   const isDesktop = useIsDesktop();
 
   useEffect(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const arr = [];
-    for (let i = 0; i < 14; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() + i);
-      arr.push(d);
-    }
-    setDays(arr);
+    const start = todayIso();
+    setDays(Array.from({ length: 14 }, (_, i) => addDays(start, i)));
   }, []);
 
   useEffect(() => {
     (async () => {
       try {
         const res = await window.storage.get("my-name", false);
-        if (res && res.value) setName(res.value);
+        if (res && res.value) {
+          setName(res.value);
+          // Names saved before surnames were required: keep the identity so
+          // existing entries can be migrated, but ask for the surname first.
+          if (!hasSurname(res.value)) {
+            setFirstDraft(splitName(res.value).first);
+            setNeedsSurname(true);
+          }
+        }
       } catch (e) {
         console.info("No saved name yet:", e?.message || e);
       } finally {
@@ -217,24 +278,19 @@ export default function App() {
     if (days.length === 0) return;
     setRefreshing(true);
     try {
+      // One bounded query for the whole visible window. The upper bound is the
+      // day after the last shown day, so it stops before that day's entries
+      // ("avail:2026-09-03" sorts above "avail:2026-09-02:Ime").
+      const fromKey = `avail:${days[0]}`;
+      const toKey = `avail:${addDays(days[days.length - 1], 1)}`;
+      const res = await window.storage.range(fromKey, toKey, true);
       const result = {};
-      for (const d of days) {
-        const iso = isoDate(d);
-        const listRes = await window.storage.list(`avail:${iso}:`, true);
-        const keys = listRes && listRes.keys ? listRes.keys : [];
-        const entries = {};
-        for (const k of keys) {
-          try {
-            const got = await window.storage.get(k, true);
-            if (got && got.value) {
-              const person = k.slice(`avail:${iso}:`.length);
-              entries[person] = decodeEntry(got.value);
-            }
-          } catch (e) {
-            // skip missing key
-          }
-        }
-        result[iso] = entries;
+      for (const iso of days) result[iso] = {};
+      for (const row of (res && res.rows) || []) {
+        const iso = isoFromKey(row.key);
+        const person = personFromKey(row.key);
+        if (!person || !(iso in result)) continue;
+        result[iso][person] = decodeEntry(row.value);
       }
       setDayData(result);
       setError(null);
@@ -252,22 +308,87 @@ export default function App() {
   useEffect(() => {
     if (days.length && !hasAutoOpenedRef.current) {
       hasAutoOpenedRef.current = true;
-      setOpenDay(isoDate(days[0]));
+      setOpenDay(days[0]);
     }
   }, [days]);
 
-  async function saveName(n) {
-    const trimmed = n.trim();
-    if (!trimmed) return;
-    setName(trimmed);
+  async function fetchExistingNames() {
+    const res = await window.storage.list("avail:", true);
+    const names = new Set();
+    for (const k of (res && res.keys) || []) {
+      const person = personFromKey(k);
+      if (person) names.add(person);
+    }
+    return names;
+  }
+
+  // The name *is* the identity, so a rename has to carry existing entries
+  // across or they'd be stranded under the old name, visible to everyone but
+  // editable by no one. Keys are re-read from storage rather than taken from
+  // dayData, so this stays correct even if the initial load hasn't landed yet.
+  async function migrateEntries(from, to) {
+    try {
+      const res = await window.storage.list("avail:", true);
+      const keys = ((res && res.keys) || []).filter(
+        (k) => personFromKey(k) === from
+      );
+      for (const key of keys) {
+        const got = await window.storage.get(key, true);
+        if (!got || !got.value) continue;
+        await window.storage.set(`avail:${isoFromKey(key)}:${to}`, got.value, true);
+        await window.storage.delete(key, true);
+      }
+      if (keys.length) await loadAllData();
+    } catch (e) {
+      setError("Vnosov ni bilo mogoče prenesti na novo ime. Poskusi znova.");
+    }
+  }
+
+  async function commitName(full) {
+    const previous = name;
+    setName(full);
+    setDuplicateName(null);
+    setNeedsSurname(false);
     setEditingName(false);
     setError(null);
     try {
-      await window.storage.set("my-name", trimmed, false);
+      await window.storage.set("my-name", full, false);
     } catch (e) {
       console.error("saveName storage error:", e);
       setError("Ime se ni shranilo za naslednjič (a lahko nadaljuješ zdaj).");
     }
+    if (previous && previous !== full) await migrateEntries(previous, full);
+  }
+
+  function startEditingName() {
+    const parts = splitName(name);
+    setFirstDraft(parts.first);
+    setLastDraft(parts.last);
+    setDuplicateName(null);
+    setEditingName(true);
+  }
+
+  async function submitName(first, last) {
+    const full = normalizeName(first, last);
+    if (!hasSurname(full)) return;
+    setCheckingName(true);
+    try {
+      const existing = await fetchExistingNames();
+      const clash = [...existing].find(
+        (n) => n.toLowerCase() === full.toLowerCase() && n !== name
+      );
+      if (clash) {
+        setDuplicateName(clash);
+        return;
+      }
+    } catch (e) {
+      // If the lookup fails, let them in rather than blocking on a check that
+      // is only a safety net -- surnames already make clashes unlikely.
+      console.info("Name check failed, continuing:", e?.message || e);
+    } finally {
+      setCheckingName(false);
+    }
+    await commitName(full);
   }
 
   function verifyPassword() {
@@ -395,36 +516,76 @@ export default function App() {
     );
   }
 
-  if (!name) {
+  if (!name || needsSurname) {
+    const draftReady = firstDraft.trim() && lastDraft.trim();
     return (
       <div style={styles.centerScreen}>
         <div style={styles.introCard}>
           <div style={styles.introEyebrow}>Garaža Klub Koledar</div>
-          <h1 style={styles.introTitle}>Kdaj imaš čas?</h1>
+          <h1 style={styles.introTitle}>
+            {needsSurname ? "Še priimek" : "Kdaj imaš čas?"}
+          </h1>
           <p style={styles.introText}>
-            Vpiši svoje ime, da lahko prijatelji vidijo, kdaj si prost za
-            druženje.
+            {needsSurname
+              ? "Dodaj še svoj priimek, da te ne zamenjamo z nekom z istim imenom."
+              : "Vpiši ime in priimek, da lahko prijatelji vidijo, kdaj si prost za druženje."}
           </p>
           {error && <div style={styles.errorBannerIntro}>{error}</div>}
-          <input
-            autoFocus
-            style={styles.input}
-            placeholder="Tvoje ime"
-            value={nameDraft}
-            onChange={(e) => setNameDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && saveName(nameDraft)}
-          />
-          <button
-            style={{
-              ...styles.primaryButton,
-              opacity: nameDraft.trim() ? 1 : 0.5,
-            }}
-            disabled={!nameDraft.trim()}
-            onClick={() => saveName(nameDraft)}
-          >
-            Vstopi
-            <ChevronRight size={18} />
-          </button>
+
+          {duplicateName ? (
+            <>
+              <div style={styles.errorBannerIntro}>
+                «{duplicateName}» je že v koledarju.
+              </div>
+              <button
+                style={styles.primaryButton}
+                onClick={() => commitName(duplicateName)}
+              >
+                To sem jaz
+                <ChevronRight size={18} />
+              </button>
+              <button
+                style={styles.introSecondaryButton}
+                onClick={() => setDuplicateName(null)}
+              >
+                Nekdo drug sem
+              </button>
+            </>
+          ) : (
+            <>
+              <input
+                autoFocus={!needsSurname}
+                style={styles.input}
+                placeholder="Ime"
+                value={firstDraft}
+                onChange={(e) => setFirstDraft(e.target.value)}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && submitName(firstDraft, lastDraft)
+                }
+              />
+              <input
+                autoFocus={needsSurname}
+                style={styles.input}
+                placeholder="Priimek"
+                value={lastDraft}
+                onChange={(e) => setLastDraft(e.target.value)}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && submitName(firstDraft, lastDraft)
+                }
+              />
+              <button
+                style={{
+                  ...styles.primaryButton,
+                  opacity: draftReady && !checkingName ? 1 : 0.5,
+                }}
+                disabled={!draftReady || checkingName}
+                onClick={() => submitName(firstDraft, lastDraft)}
+              >
+                {checkingName ? "Preverjam …" : "Vstopi"}
+                {!checkingName && <ChevronRight size={18} />}
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -473,6 +634,73 @@ export default function App() {
   }
 
   const today = days[0];
+
+  const avatarButton = (
+    <button
+      style={styles.avatarButton}
+      onClick={startEditingName}
+      aria-label="Uredi ime"
+    >
+      {initials(name)}
+      <Pencil size={11} style={styles.pencilBadge} />
+    </button>
+  );
+
+  const nameEditRow = editingName && (
+    <div style={styles.editNameRow}>
+      <input
+        autoFocus
+        style={styles.inputSmall}
+        placeholder="Ime"
+        value={firstDraft}
+        onChange={(e) => setFirstDraft(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && submitName(firstDraft, lastDraft)}
+      />
+      <input
+        style={styles.inputSmall}
+        placeholder="Priimek"
+        value={lastDraft}
+        onChange={(e) => setLastDraft(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && submitName(firstDraft, lastDraft)}
+      />
+      <button
+        style={styles.smallButton}
+        disabled={!firstDraft.trim() || !lastDraft.trim() || checkingName}
+        onClick={() => submitName(firstDraft, lastDraft)}
+      >
+        Shrani
+      </button>
+      <button
+        style={styles.smallButtonGhost}
+        onClick={() => {
+          setDuplicateName(null);
+          setEditingName(false);
+        }}
+      >
+        Prekliči
+      </button>
+    </div>
+  );
+
+  // Renaming into a name someone else already uses would silently take over
+  // their entries, so the same confirm step as the intro screen applies here.
+  const nameClashRow = duplicateName && !needsSurname && (
+    <div style={styles.editNameRow}>
+      <span style={styles.clashText}>«{duplicateName}» je že v koledarju.</span>
+      <button
+        style={styles.smallButton}
+        onClick={() => commitName(duplicateName)}
+      >
+        To sem jaz
+      </button>
+      <button
+        style={styles.smallButtonGhost}
+        onClick={() => setDuplicateName(null)}
+      >
+        Nekdo drug sem
+      </button>
+    </div>
+  );
 
   const viewPersonModal = viewPerson && (
     <div style={styles.modalOverlay} onClick={() => setViewPerson(null)}>
@@ -533,8 +761,8 @@ export default function App() {
   );
 
   if (isDesktop) {
-    const iso = openDay || (today ? isoDate(today) : null);
-    const selectedDate = days.find((d) => isoDate(d) === iso) || today;
+    const iso = openDay || today || null;
+    const selectedIso = days.includes(iso) ? iso : today;
     const entries = (iso && dayData[iso]) || {};
     const allEntries = Object.entries(entries).sort(([a], [b]) =>
       a === name ? -1 : b === name ? 1 : a.localeCompare(b)
@@ -553,39 +781,11 @@ export default function App() {
                 kdaj maš cajt?
               </h1>
             </div>
-            <button
-              style={styles.avatarButton}
-              onClick={() => {
-                setNameDraft(name);
-                setEditingName(true);
-              }}
-              aria-label="Uredi ime"
-            >
-              {initials(name)}
-              <Pencil size={11} style={styles.pencilBadge} />
-            </button>
+            {avatarButton}
           </header>
 
-          {editingName && (
-            <div style={styles.editNameRow}>
-              <input
-                autoFocus
-                style={styles.inputSmall}
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && saveName(nameDraft)}
-              />
-              <button style={styles.smallButton} onClick={() => saveName(nameDraft)}>
-                Shrani
-              </button>
-              <button
-                style={styles.smallButtonGhost}
-                onClick={() => setEditingName(false)}
-              >
-                Prekliči
-              </button>
-            </div>
-          )}
+          {nameEditRow}
+          {nameClashRow}
 
           {error && <div style={styles.errorBanner}>{error}</div>}
 
@@ -598,20 +798,20 @@ export default function App() {
           <div style={styles.desktopLayout}>
             <div style={styles.dayGrid}>
               {days.map((d) => {
-                const dIso = isoDate(d);
+                const dIso = d;
                 const dEntries = dayData[dIso] || {};
                 const people = Object.entries(dEntries).filter(([n]) => n !== name);
                 const freePeople = people.filter(([, e]) => dominantStatus(e.hours) === "free");
                 const busyPeople = people.filter(([, e]) => dominantStatus(e.hours) === "busy");
                 const isSelected = dIso === iso;
-                const isToday = dIso === isoDate(today);
+                const isToday = dIso === today;
                 return (
                   <button
                     key={dIso}
                     style={styles.daySquare(isSelected, isToday)}
                     onClick={() => selectDay(dIso)}
                   >
-                    <div style={styles.daySquareNum}>{d.getDate()}</div>
+                    <div style={styles.daySquareNum}>{dayNumber(d)}</div>
                     <div style={styles.daySquareLabel}>{dayLabel(d, today)}</div>
                     <div style={styles.daySquareDots}>
                       {freePeople.length > 0 && (
@@ -627,12 +827,12 @@ export default function App() {
             </div>
 
             <div style={styles.detailPanel}>
-              {selectedDate && (
+              {selectedIso && (
                 <div style={styles.detailHeaderRow}>
                   <div>
-                    <div style={styles.detailDateNum}>{selectedDate.getDate()}</div>
+                    <div style={styles.detailDateNum}>{dayNumber(selectedIso)}</div>
                     <div style={styles.detailDateLabel}>
-                      {dayLabel(selectedDate, today)}
+                      {dayLabel(selectedIso, today)}
                     </div>
                   </div>
                   {!isEditing && (
@@ -787,8 +987,8 @@ export default function App() {
                     <div style={styles.peopleSection}>
                       <div style={styles.sectionLabel}>Vneseni vnosi</div>
                       {allEntries.map(([n, e]) => {
-                        const quickStatus = selectedDate
-                          ? quickStatusText(e.hours, dayLabel(selectedDate, today))
+                        const quickStatus = selectedIso
+                          ? quickStatusText(e.hours, dayLabel(selectedIso, today))
                           : null;
                         return (
                         <button
@@ -799,8 +999,8 @@ export default function App() {
                               name: n,
                               hours: e.hours,
                               note: e.note,
-                              dateText: selectedDate
-                                ? `${selectedDate.getDate()}. ${dayLabel(selectedDate, today)}`
+                              dateText: selectedIso
+                                ? `${dayNumber(selectedIso)}. ${dayLabel(selectedIso, today)}`
                                 : "",
                             })
                           }
@@ -865,39 +1065,11 @@ export default function App() {
             kdaj maš cajt?
           </h1>
         </div>
-        <button
-          style={styles.avatarButton}
-          onClick={() => {
-            setNameDraft(name);
-            setEditingName(true);
-          }}
-          aria-label="Uredi ime"
-        >
-          {initials(name)}
-          <Pencil size={11} style={styles.pencilBadge} />
-        </button>
+        {avatarButton}
       </header>
 
-      {editingName && (
-        <div style={styles.editNameRow}>
-          <input
-            autoFocus
-            style={styles.inputSmall}
-            value={nameDraft}
-            onChange={(e) => setNameDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && saveName(nameDraft)}
-          />
-          <button style={styles.smallButton} onClick={() => saveName(nameDraft)}>
-            Shrani
-          </button>
-          <button
-            style={styles.smallButtonGhost}
-            onClick={() => setEditingName(false)}
-          >
-            Prekliči
-          </button>
-        </div>
-      )}
+      {nameEditRow}
+      {nameClashRow}
 
       {error && <div style={styles.errorBanner}>{error}</div>}
 
@@ -909,7 +1081,7 @@ export default function App() {
 
       <div style={styles.list}>
         {days.map((d) => {
-          const iso = isoDate(d);
+          const iso = d;
           const entries = dayData[iso] || {};
           const people = Object.entries(entries).filter(([n]) => n !== name);
           const allEntries = Object.entries(entries).sort(([a], [b]) =>
@@ -918,13 +1090,13 @@ export default function App() {
           const freePeople = people.filter(([, e]) => dominantStatus(e.hours) === "free");
           const busyPeople = people.filter(([, e]) => dominantStatus(e.hours) === "busy");
           const isOpen = openDay === iso;
-          const isToday = iso === isoDate(today);
+          const isToday = iso === today;
 
           return (
             <div key={iso} style={styles.dayCard(isToday)}>
               <button style={styles.dayHeader} onClick={() => openDayCard(iso)}>
                 <div style={styles.dayDateBlock}>
-                  <div style={styles.dayNum}>{d.getDate()}</div>
+                  <div style={styles.dayNum}>{dayNumber(d)}</div>
                   <div style={styles.dayName}>{dayLabel(d, today)}</div>
                 </div>
                 <div style={styles.dayPeople}>
@@ -1124,7 +1296,7 @@ export default function App() {
                                     name: n,
                                     hours: e.hours,
                                     note: e.note,
-                                    dateText: `${d.getDate()}. ${dayLabel(d, today)}`,
+                                    dateText: `${dayNumber(d)}. ${dayLabel(d, today)}`,
                                   })
                                 }
                               >
@@ -1279,6 +1451,18 @@ const styles = {
     borderRadius: 12,
     cursor: "pointer",
   },
+  introSecondaryButton: {
+    width: "100%",
+    marginTop: 10,
+    padding: "13px 14px",
+    fontSize: 14.5,
+    fontWeight: 600,
+    color: "#5B6862",
+    background: "transparent",
+    border: "1.5px solid #E3E1D9",
+    borderRadius: 12,
+    cursor: "pointer",
+  },
   header: {
     display: "flex",
     justifyContent: "space-between",
@@ -1349,6 +1533,12 @@ const styles = {
     border: "none",
     borderRadius: 10,
     cursor: "pointer",
+  },
+  clashText: {
+    flex: 1,
+    alignSelf: "center",
+    fontSize: 13,
+    color: RED,
   },
   smallButtonGhost: {
     padding: "9px 14px",

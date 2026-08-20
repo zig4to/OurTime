@@ -60,6 +60,18 @@
           }
           return { keys };
         },
+        async range(fromKey, toKey) {
+          const rows = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (!k || !k.startsWith(STORAGE_PREFIX)) continue;
+            const bare = k.slice(STORAGE_PREFIX.length);
+            if (bare >= fromKey && bare < toKey) {
+              rows.push({ key: bare, value: localStorage.getItem(k) });
+            }
+          }
+          return { rows };
+        },
       };
 
       const sharedStore = {
@@ -92,6 +104,18 @@
           if (error) throw error;
           return { keys: (data || []).map((row) => row.key) };
         },
+        // Keys sort lexicographically and dates are ISO, so a key range is a
+        // date range: this pulls the whole visible window in one request
+        // instead of a list() per day plus a get() per entry.
+        async range(fromKey, toKey) {
+          const { data, error } = await supabase
+            .from("kv_store")
+            .select("key,value")
+            .gte("key", fromKey)
+            .lt("key", toKey);
+          if (error) throw error;
+          return { rows: data || [] };
+        },
       };
 
       window.storage = {
@@ -99,6 +123,8 @@
         set: (key, value, shared) => (shared ? sharedStore : localStore).set(key, value),
         delete: (key, shared) => (shared ? sharedStore : localStore).delete(key),
         list: (prefix, shared) => (shared ? sharedStore : localStore).list(prefix),
+        range: (fromKey, toKey, shared) =>
+          (shared ? sharedStore : localStore).range(fromKey, toKey),
       };
 
       const source = await (await fetch("./skupni-koledar.jsx")).text();
