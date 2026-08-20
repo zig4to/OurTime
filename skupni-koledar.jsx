@@ -3,6 +3,7 @@ import { Users, ChevronRight, Pencil, Eraser, Trash2, MessageSquare } from "luci
 
 const GREEN = "#2F6F5E";
 const GREEN_BG = "#E4F1EC";
+const ORANGE = "#C6862F";
 const RED = "#B4482F";
 const RED_BG = "#F7E9E4";
 const NEUTRAL_BG = "#F1F0EA";
@@ -160,6 +161,15 @@ function quickStatusText(hours, dayLabelText) {
   if (allFree) return `${prefix} prost`;
   if (allBusy) return `${prefix} zaseden`;
   return `${prefix} delno zaseden`;
+}
+
+// Three-tier day status for a person's avatar circle: green if free the
+// whole day, orange if only part of it, red if busy all day or nothing
+// was marked free at all (including a note-only entry with no hours set).
+function freeBusyTier(hours) {
+  const hasFree = hours.some((h) => h === "free");
+  if (!hasFree) return "busy";
+  return hours.every((h) => h === "free") ? "free" : "partial";
 }
 
 function dominantStatus(hours) {
@@ -1087,8 +1097,9 @@ export default function App() {
           const allEntries = Object.entries(entries).sort(([a], [b]) =>
             a === name ? -1 : b === name ? 1 : a.localeCompare(b)
           );
-          const freePeople = people.filter(([, e]) => dominantStatus(e.hours) === "free");
-          const busyPeople = people.filter(([, e]) => dominantStatus(e.hours) === "busy");
+          const freePeople = people.filter(([, e]) => freeBusyTier(e.hours) === "free");
+          const partialPeople = people.filter(([, e]) => freeBusyTier(e.hours) === "partial");
+          const busyPeople = people.filter(([, e]) => freeBusyTier(e.hours) === "busy");
           const isOpen = openDay === iso;
           const isToday = iso === today;
 
@@ -1100,7 +1111,7 @@ export default function App() {
                   <div style={styles.dayName}>{dayLabel(d, today)}</div>
                 </div>
                 <div style={styles.dayPeople}>
-                  {freePeople.length === 0 && busyPeople.length === 0 ? (
+                  {people.length === 0 ? (
                     <span style={styles.noOne}>
                       {entryCountLabel(allEntries.length)}
                     </span>
@@ -1108,6 +1119,11 @@ export default function App() {
                     <>
                       {freePeople.slice(0, 5).map(([n]) => (
                         <span key={n} style={styles.avatarChip(GREEN)}>
+                          {initials(n)}
+                        </span>
+                      ))}
+                      {partialPeople.slice(0, 4).map(([n]) => (
+                        <span key={n} style={styles.avatarChip(ORANGE)}>
                           {initials(n)}
                         </span>
                       ))}
