@@ -777,44 +777,48 @@ export default function App() {
 
   const nameEditRow = editingName && (
     <div style={styles.editNameRow}>
-      <input
-        autoFocus
-        style={styles.inputSmall}
-        placeholder="Ime"
-        value={firstDraft}
-        onChange={(e) => setFirstDraft(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && submitName(firstDraft, lastDraft)}
-      />
-      <input
-        style={styles.inputSmall}
-        placeholder="Priimek"
-        value={lastDraft}
-        onChange={(e) => setLastDraft(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && submitName(firstDraft, lastDraft)}
-      />
-      <button
-        style={styles.smallButton}
-        disabled={!firstDraft.trim() || !lastDraft.trim() || checkingName}
-        onClick={() => submitName(firstDraft, lastDraft)}
-      >
-        Shrani
-      </button>
-      <button
-        style={styles.smallButtonGhost}
-        onClick={() => {
-          setDuplicateName(null);
-          setEditingName(false);
-        }}
-      >
-        Prekliči
-      </button>
+      <div style={styles.editNameInputs}>
+        <input
+          autoFocus
+          style={styles.inputSmall}
+          placeholder="Ime"
+          value={firstDraft}
+          onChange={(e) => setFirstDraft(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submitName(firstDraft, lastDraft)}
+        />
+        <input
+          style={styles.inputSmall}
+          placeholder="Priimek"
+          value={lastDraft}
+          onChange={(e) => setLastDraft(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submitName(firstDraft, lastDraft)}
+        />
+      </div>
+      <div style={styles.editNameActions}>
+        <button
+          style={styles.smallButton}
+          disabled={!firstDraft.trim() || !lastDraft.trim() || checkingName}
+          onClick={() => submitName(firstDraft, lastDraft)}
+        >
+          Shrani
+        </button>
+        <button
+          style={styles.smallButtonGhost}
+          onClick={() => {
+            setDuplicateName(null);
+            setEditingName(false);
+          }}
+        >
+          Prekliči
+        </button>
+      </div>
     </div>
   );
 
   // Renaming into a name someone else already uses would silently take over
   // their entries, so the same confirm step as the intro screen applies here.
   const nameClashRow = duplicateName && !needsSurname && (
-    <div style={styles.editNameRow}>
+    <div style={styles.clashRow}>
       <span style={styles.clashText}>«{duplicateName}» je že v koledarju.</span>
       <button
         style={styles.smallButton}
@@ -1722,12 +1726,28 @@ const styles = {
   },
   editNameRow: {
     display: "flex",
-    flexWrap: "wrap",
+    flexDirection: "column",
     gap: 8,
     padding: "0 20px 8px 20px",
   },
+  clashRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+    padding: "0 20px 8px 20px",
+  },
+  editNameInputs: {
+    display: "flex",
+    gap: 8,
+  },
+  editNameActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
   inputSmall: {
-    flex: "1 1 120px",
+    flex: 1,
     minWidth: 0,
     boxSizing: "border-box",
     padding: "9px 12px",
