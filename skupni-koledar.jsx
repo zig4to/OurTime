@@ -492,7 +492,7 @@ export default function App() {
             <div>
               <div style={styles.eyebrow}>Skupni koledar</div>
               <h1 style={styles.headerTitle}>
-                Živijo{" "}
+                Živjo{" "}
                 <span style={styles.headerAccent}>{capitalize(name.split(" ")[0])}</span>,
                 kdaj maš cajt?
               </h1>
@@ -805,7 +805,7 @@ export default function App() {
         <div>
           <div style={styles.eyebrow}>Skupni koledar</div>
           <h1 style={styles.headerTitle}>
-            Živijo <span style={styles.headerAccent}>{capitalize(name.split(" ")[0])}</span>,
+            Živjo <span style={styles.headerAccent}>{capitalize(name.split(" ")[0])}</span>,
             kdaj maš cajt?
           </h1>
         </div>
