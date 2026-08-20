@@ -385,7 +385,7 @@ export default function App() {
     return (
       <div style={styles.centerScreen}>
         <div style={styles.introCard}>
-          <div style={styles.introEyebrow}>Skupni koledar</div>
+          <div style={styles.introEyebrow}>Garaža Klub Koledar</div>
           <h1 style={styles.introTitle}>Kdaj imaš čas?</h1>
           <p style={styles.introText}>
             Vpiši svoje ime, da lahko prijatelji vidijo, kdaj si prost za
@@ -490,7 +490,7 @@ export default function App() {
         <div style={styles.desktopContainer}>
           <header style={styles.header}>
             <div>
-              <div style={styles.eyebrow}>Skupni koledar</div>
+              <div style={styles.eyebrow}>Garaža Klub Koledar</div>
               <h1 style={styles.headerTitle}>
                 Živjo{" "}
                 <span style={styles.headerAccent}>{capitalize(name.split(" ")[0])}</span>,
@@ -803,7 +803,7 @@ export default function App() {
     <div style={styles.page}>
       <header style={styles.header}>
         <div>
-          <div style={styles.eyebrow}>Skupni koledar</div>
+          <div style={styles.eyebrow}>Garaža Klub Koledar</div>
           <h1 style={styles.headerTitle}>
             Živjo <span style={styles.headerAccent}>{capitalize(name.split(" ")[0])}</span>,
             kdaj maš cajt?
@@ -1238,7 +1238,7 @@ const styles = {
     marginBottom: 4,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: 400,
     margin: 0,
     color: "#1B2E24",
