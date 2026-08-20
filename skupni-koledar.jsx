@@ -527,7 +527,7 @@ export default function App() {
 
           <div style={styles.legend}>
             <p style={styles.tagline}>
-              Kdaj se <span style={styles.taglineAccent}>dobimo</span>?
+              Kdaj se <span style={styles.taglineAccent}>Dobimo</span>?
             </p>
             {refreshing && <span style={styles.syncLabel}>sinhroniziram …</span>}
           </div>
@@ -837,7 +837,7 @@ export default function App() {
 
       <div style={styles.legend}>
         <p style={styles.tagline}>
-          Kdaj se <span style={styles.taglineAccent}>dobimo</span>?
+          Kdaj se <span style={styles.taglineAccent}>Dobimo</span>?
         </p>
         {refreshing && <span style={styles.syncLabel}>sinhroniziram …</span>}
       </div>
@@ -1314,7 +1314,7 @@ const styles = {
     padding: "4px 20px 14px 20px",
   },
   tagline: {
-    fontSize: 16,
+    fontSize: 19,
     fontWeight: 600,
     color: "#374840",
     margin: 0,
@@ -1322,10 +1322,6 @@ const styles = {
   taglineAccent: {
     color: GREEN,
     fontWeight: 800,
-    textDecoration: "underline",
-    textDecorationColor: GREEN,
-    textDecorationThickness: "2px",
-    textUnderlineOffset: "3px",
   },
   syncLabel: {
     marginLeft: "auto",
