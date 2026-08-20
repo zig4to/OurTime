@@ -487,7 +487,7 @@ export default function App() {
           <header style={styles.header}>
             <div>
               <div style={styles.eyebrow}>Skupni koledar</div>
-              <h1 style={styles.headerTitle}>Živjo, {name.split(" ")[0]}</h1>
+              <h1 style={styles.headerTitle}>Živijo {name.split(" ")[0]}, kdaj maš cajt?</h1>
             </div>
             <button
               style={styles.avatarButton}
@@ -525,13 +525,11 @@ export default function App() {
 
           {error && <div style={styles.errorBanner}>{error}</div>}
 
-          <div style={styles.legend}>
-            <p style={styles.tagline}>
-              Ej <span style={styles.taglineAccent}>Frend</span>, kdaj maš{" "}
-              <span style={styles.taglineAccent}>Cajt</span>
-            </p>
-            {refreshing && <span style={styles.syncLabel}>sinhroniziram …</span>}
-          </div>
+          {refreshing && (
+            <div style={styles.legend}>
+              <span style={styles.syncLabel}>sinhroniziram …</span>
+            </div>
+          )}
 
           <div style={styles.desktopLayout}>
             <div style={styles.dayGrid}>
@@ -798,7 +796,7 @@ export default function App() {
       <header style={styles.header}>
         <div>
           <div style={styles.eyebrow}>Skupni koledar</div>
-          <h1 style={styles.headerTitle}>Živjo, {name.split(" ")[0]}</h1>
+          <h1 style={styles.headerTitle}>Živijo {name.split(" ")[0]}, kdaj maš cajt?</h1>
         </div>
         <button
           style={styles.avatarButton}
@@ -836,13 +834,11 @@ export default function App() {
 
       {error && <div style={styles.errorBanner}>{error}</div>}
 
-      <div style={styles.legend}>
-        <p style={styles.tagline}>
-          Ej <span style={styles.taglineAccent}>Frend</span>, kdaj maš{" "}
-          <span style={styles.taglineAccent}>Cajt</span>
-        </p>
-        {refreshing && <span style={styles.syncLabel}>sinhroniziram …</span>}
-      </div>
+      {refreshing && (
+        <div style={styles.legend}>
+          <span style={styles.syncLabel}>sinhroniziram …</span>
+        </div>
+      )}
 
       <div style={styles.list}>
         {days.map((d) => {
@@ -1315,18 +1311,7 @@ const styles = {
     gap: 16,
     padding: "4px 20px 14px 20px",
   },
-  tagline: {
-    fontSize: 19,
-    fontWeight: 600,
-    color: "#374840",
-    margin: 0,
-  },
-  taglineAccent: {
-    color: GREEN,
-    fontWeight: 800,
-  },
   syncLabel: {
-    marginLeft: "auto",
     fontSize: 11.5,
     color: "#9AA5A0",
     fontStyle: "italic",
