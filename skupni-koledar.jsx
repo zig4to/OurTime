@@ -33,6 +33,10 @@ function initials(name) {
     .join("");
 }
 
+function capitalize(word) {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
 function blankHours() {
   return Array(24).fill(null);
 }
@@ -489,7 +493,7 @@ export default function App() {
               <div style={styles.eyebrow}>Skupni koledar</div>
               <h1 style={styles.headerTitle}>
                 Živijo{" "}
-                <span style={styles.headerAccent}>{name.split(" ")[0]}</span>,
+                <span style={styles.headerAccent}>{capitalize(name.split(" ")[0])}</span>,
                 kdaj maš cajt?
               </h1>
             </div>
@@ -801,7 +805,7 @@ export default function App() {
         <div>
           <div style={styles.eyebrow}>Skupni koledar</div>
           <h1 style={styles.headerTitle}>
-            Živijo <span style={styles.headerAccent}>{name.split(" ")[0]}</span>,
+            Živijo <span style={styles.headerAccent}>{capitalize(name.split(" ")[0])}</span>,
             kdaj maš cajt?
           </h1>
         </div>
@@ -1223,7 +1227,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    padding: "44px 20px 24px 20px",
+    padding: "12px 20px 24px 20px",
   },
   eyebrow: {
     fontSize: 11,
@@ -1238,7 +1242,6 @@ const styles = {
     fontWeight: 400,
     margin: 0,
     color: "#1B2E24",
-    textTransform: "lowercase",
   },
   headerAccent: {
     color: GREEN,
