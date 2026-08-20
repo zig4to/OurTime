@@ -135,6 +135,13 @@ function fmtHour(h) {
   return `${String(h % 24).padStart(2, "0")}:00`;
 }
 
+function entryCountLabel(n) {
+  if (n === 0) return "Še nihče ni vnesel";
+  if (n === 1) return "1 vnos";
+  if (n >= 2 && n <= 4) return `${n} vnosi`;
+  return `${n} vnosov`;
+}
+
 function useIsDesktop(breakpoint = 860) {
   const [isDesktop, setIsDesktop] = useState(
     typeof window !== "undefined" ? window.innerWidth >= breakpoint : false
@@ -867,7 +874,9 @@ export default function App() {
                 </div>
                 <div style={styles.dayPeople}>
                   {freePeople.length === 0 && busyPeople.length === 0 ? (
-                    <span style={styles.noOne}>Še nihče ni vnesel</span>
+                    <span style={styles.noOne}>
+                      {entryCountLabel(allEntries.length)}
+                    </span>
                   ) : (
                     <>
                       {freePeople.slice(0, 5).map(([n]) => (
