@@ -1291,7 +1291,7 @@ const styles = {
     textTransform: "uppercase",
     color: "#8A9A91",
     fontWeight: 700,
-    marginBottom: 4,
+    marginBottom: 10,
   },
   headerTitle: {
     fontSize: 19,
@@ -1417,13 +1417,13 @@ const styles = {
     textAlign: "center",
   },
   dayNum: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 800,
     color: "#1B2E24",
     lineHeight: 1.1,
   },
   dayName: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: "#8A9A91",
     textTransform: "capitalize",
     fontWeight: 600,
@@ -1856,7 +1856,7 @@ const styles = {
   },
   dayGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(7, 1fr)",
+    gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
     gap: 6,
     width: 322,
     flexShrink: 0,
@@ -1876,13 +1876,13 @@ const styles = {
     padding: 2,
   }),
   daySquareNum: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: 800,
     color: "#1B2E24",
     lineHeight: 1.1,
   },
   daySquareLabel: {
-    fontSize: 9.5,
+    fontSize: 11,
     color: "#8A9A91",
     textTransform: "capitalize",
     fontWeight: 600,
