@@ -2171,6 +2171,7 @@ const styles = {
     maxWidth: 420,
     background: "var(--card-bg)",
     borderRadius: "18px 18px 0 0",
+    borderTop: `3px solid ${GREEN}`,
     padding: "18px 20px 26px 20px",
     maxHeight: "78vh",
     overflowY: "auto",
