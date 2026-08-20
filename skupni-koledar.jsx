@@ -1232,7 +1232,7 @@ const styles = {
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: 800,
+    fontWeight: 400,
     margin: 0,
     color: "#1B2E24",
   },
