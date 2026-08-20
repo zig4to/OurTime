@@ -89,6 +89,18 @@ function decodeEntry(raw) {
   return { hours: decodeHours(raw.slice(0, sep)), note };
 }
 
+// Short inline summary shown next to a person's name, e.g. "danes prost".
+function quickStatusText(hours, dayLabelText) {
+  const anySet = hours.some((h) => h !== null);
+  if (!anySet) return null;
+  const allFree = hours.every((h) => h === "free");
+  const allBusy = hours.every((h) => h === "busy");
+  const prefix = dayLabelText.toLowerCase();
+  if (allFree) return `${prefix} prost`;
+  if (allBusy) return `${prefix} zaseden`;
+  return `${prefix} delno zaseden`;
+}
+
 function dominantStatus(hours) {
   let free = 0;
   let busy = 0;
@@ -706,7 +718,11 @@ export default function App() {
                   ) : (
                     <div style={styles.peopleSection}>
                       <div style={styles.sectionLabel}>Vneseni vnosi</div>
-                      {allEntries.map(([n, e]) => (
+                      {allEntries.map(([n, e]) => {
+                        const quickStatus = selectedDate
+                          ? quickStatusText(e.hours, dayLabel(selectedDate, today))
+                          : null;
+                        return (
                         <button
                           key={n}
                           style={styles.entryRow}
@@ -738,6 +754,12 @@ export default function App() {
                               {n === name && (
                                 <span style={styles.entryYou}> (ti)</span>
                               )}
+                              {quickStatus && (
+                                <span style={styles.entryQuickStatus}>
+                                  {" "}
+                                  - {quickStatus}
+                                </span>
+                              )}
                             </span>
                             {e.note && (
                               <span style={styles.entryNoteText}>{e.note}</span>
@@ -745,7 +767,8 @@ export default function App() {
                           </span>
                           <ChevronRight size={15} color="#B3BBB5" />
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </>
@@ -1019,7 +1042,12 @@ export default function App() {
                       ) : (
                         <div style={styles.peopleSection}>
                           <div style={styles.sectionLabel}>Vneseni vnosi</div>
-                          {allEntries.map(([n, e]) => (
+                          {allEntries.map(([n, e]) => {
+                            const quickStatus = quickStatusText(
+                              e.hours,
+                              dayLabel(d, today)
+                            );
+                            return (
                             <div key={n} style={styles.entryRowWrap}>
                               <button
                                 style={styles.entryRow}
@@ -1049,6 +1077,12 @@ export default function App() {
                                     {n === name && (
                                       <span style={styles.entryYou}> (ti)</span>
                                     )}
+                                    {quickStatus && (
+                                      <span style={styles.entryQuickStatus}>
+                                        {" "}
+                                        - {quickStatus}
+                                      </span>
+                                    )}
                                   </span>
                                   {e.note && (
                                     <span style={styles.entryNoteText}>{e.note}</span>
@@ -1066,7 +1100,8 @@ export default function App() {
                                 </button>
                               )}
                             </div>
-                          ))}
+                            );
+                          })}
                           {!entries[name] && (
                             <button
                               style={styles.addButtonSecondary}
@@ -1631,6 +1666,11 @@ const styles = {
     fontSize: 12,
     fontWeight: 500,
     color: "#9AA5A0",
+  },
+  entryQuickStatus: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#7C8A83",
   },
   modalOverlay: {
     position: "fixed",
