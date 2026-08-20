@@ -10,7 +10,8 @@
           "react": "https://esm.sh/react@18.3.1",
           "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
           "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-          "lucide-react": "https://esm.sh/lucide-react@0.454.0?external=react"
+          "lucide-react": "https://esm.sh/lucide-react@0.454.0?external=react",
+          "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
         }
       }
     </script>
@@ -19,11 +20,24 @@
   <body style="margin: 0">
     <div id="root"></div>
     <script type="module">
-      // No backend on GitHub Pages, so window.storage is shimmed with
-      // localStorage: data stays on this device/browser only, it is not
-      // actually shared between people who open the page.
+      import { createClient } from "@supabase/supabase-js";
+
+      // Project URL is not secret. The anon key below is also meant to be
+      // public/shipped in client JS -- Supabase's row-level security
+      // policies (see supabase-schema.sql) are what actually guard the
+      // data, not secrecy of this key. Never put the "service_role" key
+      // here instead; that one *is* secret and bypasses RLS entirely.
+      const SUPABASE_URL = "https://mpiliybdfhgqslubvhwd.supabase.co";
+      const SUPABASE_ANON_KEY = "sb_publishable_3888vcj_lpaerHs9H74Llg_-0p1W_MC";
+      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      // "my-name" stays on this device only (no reason to sync your own
+      // name across browsers) via localStorage. Everything under the
+      // "avail:" prefix is the actual shared calendar data and is backed
+      // by a Supabase table (see supabase-schema.sql) so it's visible to
+      // everyone who opens the page, not just this browser.
       const STORAGE_PREFIX = "skupni-koledar:";
-      window.storage = {
+      const localStore = {
         async get(key) {
           const raw = localStorage.getItem(STORAGE_PREFIX + key);
           return { value: raw === null ? null : raw };
@@ -46,6 +60,45 @@
           }
           return { keys };
         },
+      };
+
+      const sharedStore = {
+        async get(key) {
+          const { data, error } = await supabase
+            .from("kv_store")
+            .select("value")
+            .eq("key", key)
+            .maybeSingle();
+          if (error) throw error;
+          return { value: data ? data.value : null };
+        },
+        async set(key, value) {
+          const { error } = await supabase
+            .from("kv_store")
+            .upsert({ key, value, updated_at: new Date().toISOString() });
+          if (error) throw error;
+          return { ok: true };
+        },
+        async delete(key) {
+          const { error } = await supabase.from("kv_store").delete().eq("key", key);
+          if (error) throw error;
+          return { ok: true };
+        },
+        async list(prefix) {
+          const { data, error } = await supabase
+            .from("kv_store")
+            .select("key")
+            .like("key", `${prefix}%`);
+          if (error) throw error;
+          return { keys: (data || []).map((row) => row.key) };
+        },
+      };
+
+      window.storage = {
+        get: (key, shared) => (shared ? sharedStore : localStore).get(key),
+        set: (key, value, shared) => (shared ? sharedStore : localStore).set(key, value),
+        delete: (key, shared) => (shared ? sharedStore : localStore).delete(key),
+        list: (prefix, shared) => (shared ? sharedStore : localStore).list(prefix),
       };
 
       const source = await (await fetch("./skupni-koledar.jsx")).text();
