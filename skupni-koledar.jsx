@@ -526,14 +526,9 @@ export default function App() {
           {error && <div style={styles.errorBanner}>{error}</div>}
 
           <div style={styles.legend}>
-            <span style={styles.legendItem}>
-              <span style={{ ...styles.legendDot, background: GREEN }} />
-              Prost
-            </span>
-            <span style={styles.legendItem}>
-              <span style={{ ...styles.legendDot, background: RED }} />
-              Zaseden
-            </span>
+            <p style={styles.tagline}>
+              Kdaj se <span style={styles.taglineAccent}>dobimo</span>?
+            </p>
             {refreshing && <span style={styles.syncLabel}>sinhroniziram …</span>}
           </div>
 
@@ -841,14 +836,9 @@ export default function App() {
       {error && <div style={styles.errorBanner}>{error}</div>}
 
       <div style={styles.legend}>
-        <span style={styles.legendItem}>
-          <span style={{ ...styles.legendDot, background: GREEN }} />
-          Prost
-        </span>
-        <span style={styles.legendItem}>
-          <span style={{ ...styles.legendDot, background: RED }} />
-          Zaseden
-        </span>
+        <p style={styles.tagline}>
+          Kdaj se <span style={styles.taglineAccent}>dobimo</span>?
+        </p>
         {refreshing && <span style={styles.syncLabel}>sinhroniziram …</span>}
       </div>
 
@@ -1322,19 +1312,20 @@ const styles = {
     alignItems: "center",
     gap: 16,
     padding: "4px 20px 14px 20px",
-    fontSize: 12.5,
-    color: "#5B6862",
   },
-  legendItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
+  tagline: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: "#374840",
+    margin: 0,
   },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    display: "inline-block",
+  taglineAccent: {
+    color: GREEN,
+    fontWeight: 800,
+    textDecoration: "underline",
+    textDecorationColor: GREEN,
+    textDecorationThickness: "2px",
+    textUnderlineOffset: "3px",
   },
   syncLabel: {
     marginLeft: "auto",
