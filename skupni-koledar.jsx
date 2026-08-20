@@ -9,6 +9,7 @@ const NEUTRAL_BG = "#F1F0EA";
 const NEUTRAL_TEXT = "#AEB4AC";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const AUTH_CODE = "122333";
 
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
@@ -165,6 +166,9 @@ export default function App() {
   const [name, setName] = useState(null);
   const [nameDraft, setNameDraft] = useState("");
   const [editingName, setEditingName] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [pinDraft, setPinDraft] = useState("");
+  const [authError, setAuthError] = useState(false);
   const [days, setDays] = useState([]);
   const [dayData, setDayData] = useState({}); // { iso: { name: { hours, note } } }
   const [openDay, setOpenDay] = useState(null);
@@ -263,6 +267,16 @@ export default function App() {
     } catch (e) {
       console.error("saveName storage error:", e);
       setError("Ime se ni shranilo za naslednjič (a lahko nadaljuješ zdaj).");
+    }
+  }
+
+  function verifyPassword() {
+    if (pinDraft === AUTH_CODE) {
+      setAuthenticated(true);
+      setAuthError(false);
+    } else {
+      setAuthError(true);
+      setPinDraft("");
     }
   }
 
@@ -409,6 +423,48 @@ export default function App() {
             onClick={() => saveName(nameDraft)}
           >
             Vstopi
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return (
+      <div style={styles.centerScreen}>
+        <div style={styles.introCard}>
+          <div style={styles.introEyebrow}>Garaža Klub Koledar</div>
+          <h1 style={styles.introTitle}>Avtentikacija</h1>
+          <p style={styles.introText}>Če si pravi bitnčan vnesi geslo.</p>
+          {authError && (
+            <div style={styles.errorBannerIntro}>
+              Napačno geslo. Poskusi znova.
+            </div>
+          )}
+          <input
+            autoFocus
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            style={styles.input}
+            placeholder="Geslo"
+            value={pinDraft}
+            onChange={(e) =>
+              setPinDraft(e.target.value.replace(/\D/g, "").slice(0, 6))
+            }
+            onKeyDown={(e) => e.key === "Enter" && verifyPassword()}
+          />
+          <button
+            style={{
+              ...styles.primaryButton,
+              opacity: pinDraft.length === 6 ? 1 : 0.5,
+            }}
+            disabled={pinDraft.length !== 6}
+            onClick={verifyPassword}
+          >
+            Potrdi
             <ChevronRight size={18} />
           </button>
         </div>
