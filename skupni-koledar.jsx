@@ -33,6 +33,10 @@ function initials(name) {
     .join("");
 }
 
+function capitalize(word) {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
 function blankHours() {
   return Array(24).fill(null);
 }
@@ -487,7 +491,13 @@ export default function App() {
           <header style={styles.header}>
             <div>
               <div style={styles.eyebrow}>Skupni koledar</div>
-              <h1 style={styles.headerTitle}>Živijo {name.split(" ")[0]}, kdaj maš cajt?</h1>
+              <h1 style={styles.headerTitle}>
+                Živijo{" "}
+                <span style={styles.headerAccent}>
+                  {capitalize(name.split(" ")[0])}
+                </span>
+                , kdaj maš <span style={styles.headerAccent}>cajt</span>?
+              </h1>
             </div>
             <button
               style={styles.avatarButton}
@@ -796,7 +806,13 @@ export default function App() {
       <header style={styles.header}>
         <div>
           <div style={styles.eyebrow}>Skupni koledar</div>
-          <h1 style={styles.headerTitle}>Živijo {name.split(" ")[0]}, kdaj maš cajt?</h1>
+          <h1 style={styles.headerTitle}>
+            Živijo{" "}
+            <span style={styles.headerAccent}>
+              {capitalize(name.split(" ")[0])}
+            </span>
+            , kdaj maš <span style={styles.headerAccent}>cajt</span>?
+          </h1>
         </div>
         <button
           style={styles.avatarButton}
@@ -1216,7 +1232,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    padding: "24px 20px 8px 20px",
+    padding: "36px 20px 24px 20px",
   },
   eyebrow: {
     fontSize: 11,
@@ -1231,6 +1247,10 @@ const styles = {
     fontWeight: 400,
     margin: 0,
     color: "#1B2E24",
+  },
+  headerAccent: {
+    color: GREEN,
+    fontWeight: 700,
   },
   avatarButton: {
     position: "relative",
