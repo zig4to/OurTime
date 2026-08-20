@@ -163,13 +163,15 @@ function quickStatusText(hours, dayLabelText) {
   return `${prefix} delno zaseden`;
 }
 
-// Three-tier day status for a person's avatar circle: green if free the
-// whole day, orange if only part of it, red if busy all day or nothing
-// was marked free at all (including a note-only entry with no hours set).
+// Three-tier day status for a person's avatar circle: green only if every
+// hour is free, red only if every hour is explicitly busy (e.g. "Zaseden
+// cel dan"), orange for anything in between -- partial, mixed, or nothing
+// set at all. Red is reserved for an explicit whole-day busy mark so it
+// isn't confused with "hasn't really said yet."
 function freeBusyTier(hours) {
-  const hasFree = hours.some((h) => h === "free");
-  if (!hasFree) return "busy";
-  return hours.every((h) => h === "free") ? "free" : "partial";
+  if (hours.every((h) => h === "free")) return "free";
+  if (hours.every((h) => h === "busy")) return "busy";
+  return "partial";
 }
 
 function dominantStatus(hours) {
