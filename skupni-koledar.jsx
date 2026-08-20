@@ -527,7 +527,8 @@ export default function App() {
 
           <div style={styles.legend}>
             <p style={styles.tagline}>
-              Kdaj se <span style={styles.taglineAccent}>Dobimo</span>?
+              Ej <span style={styles.taglineAccent}>Frend</span>, kdaj maš{" "}
+              <span style={styles.taglineAccent}>Cajt</span>
             </p>
             {refreshing && <span style={styles.syncLabel}>sinhroniziram …</span>}
           </div>
@@ -837,7 +838,8 @@ export default function App() {
 
       <div style={styles.legend}>
         <p style={styles.tagline}>
-          Kdaj se <span style={styles.taglineAccent}>Dobimo</span>?
+          Ej <span style={styles.taglineAccent}>Frend</span>, kdaj maš{" "}
+          <span style={styles.taglineAccent}>Cajt</span>
         </p>
         {refreshing && <span style={styles.syncLabel}>sinhroniziram …</span>}
       </div>
