@@ -537,10 +537,11 @@ export default function App() {
                 const freePeople = people.filter(([, e]) => dominantStatus(e.hours) === "free");
                 const busyPeople = people.filter(([, e]) => dominantStatus(e.hours) === "busy");
                 const isSelected = dIso === iso;
+                const isToday = dIso === isoDate(today);
                 return (
                   <button
                     key={dIso}
-                    style={styles.daySquare(isSelected)}
+                    style={styles.daySquare(isSelected, isToday)}
                     onClick={() => selectDay(dIso)}
                   >
                     <div style={styles.daySquareNum}>{d.getDate()}</div>
@@ -853,9 +854,10 @@ export default function App() {
           const freePeople = people.filter(([, e]) => dominantStatus(e.hours) === "free");
           const busyPeople = people.filter(([, e]) => dominantStatus(e.hours) === "busy");
           const isOpen = openDay === iso;
+          const isToday = iso === isoDate(today);
 
           return (
-            <div key={iso} style={styles.dayCard}>
+            <div key={iso} style={styles.dayCard(isToday)}>
               <button style={styles.dayHeader} onClick={() => openDayCard(iso)}>
                 <div style={styles.dayDateBlock}>
                   <div style={styles.dayNum}>{d.getDate()}</div>
@@ -1335,12 +1337,13 @@ const styles = {
     gap: 10,
     padding: "0 16px",
   },
-  dayCard: {
+  dayCard: (isToday) => ({
     background: "#FFFFFF",
     borderRadius: 16,
-    border: "1px solid #EEEDE7",
+    border: isToday ? `1.5px solid ${GREEN}` : "1px solid #EEEDE7",
+    boxShadow: isToday ? `0 0 0 3px ${GREEN_BG}` : "none",
     overflow: "hidden",
-  },
+  }),
   dayHeader: {
     width: "100%",
     display: "flex",
@@ -1802,7 +1805,7 @@ const styles = {
     width: 322,
     flexShrink: 0,
   },
-  daySquare: (selected) => ({
+  daySquare: (selected, isToday) => ({
     aspectRatio: "1",
     display: "flex",
     flexDirection: "column",
@@ -1810,7 +1813,8 @@ const styles = {
     justifyContent: "center",
     gap: 2,
     borderRadius: 9,
-    border: selected ? `1.5px solid ${GREEN}` : "1px solid #EEEDE7",
+    border: selected || isToday ? `1.5px solid ${GREEN}` : "1px solid #EEEDE7",
+    boxShadow: !selected && isToday ? `0 0 0 3px ${GREEN_BG}` : "none",
     background: selected ? GREEN_BG : "#FFFFFF",
     cursor: "pointer",
     padding: 2,
