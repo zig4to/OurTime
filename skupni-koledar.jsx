@@ -234,10 +234,10 @@ export default function App() {
   }, [name, days, loadAllData]);
 
   useEffect(() => {
-    if (isDesktop && days.length && openDay == null) {
+    if (days.length && openDay == null) {
       setOpenDay(isoDate(days[0]));
     }
-  }, [isDesktop, days, openDay]);
+  }, [days, openDay]);
 
   async function saveName(n) {
     const trimmed = n.trim();
