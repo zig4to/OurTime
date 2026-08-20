@@ -719,6 +719,9 @@ export default function App() {
     );
   }
 
+  // TEMP: auth gate disabled for testing -- uncomment this whole block to
+  // restore the PIN prompt.
+  /*
   if (!authenticated) {
     return (
       <div style={styles.centerScreen}>
@@ -760,6 +763,7 @@ export default function App() {
       </div>
     );
   }
+  */
 
   const today = days[0];
   const isAdmin = name?.trim().toLowerCase() === ADMIN_NAME;
