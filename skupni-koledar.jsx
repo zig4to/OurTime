@@ -11,6 +11,7 @@ const NEUTRAL_TEXT = "#AEB4AC";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const AUTH_CODE = "122333";
+const ADMIN_NAME = "žiga tomše";
 const TIME_ZONE = "Europe/Ljubljana";
 
 // Days are plain "YYYY-MM-DD" strings anchored to Ljubljana rather than Date
@@ -253,6 +254,7 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editingDay, setEditingDay] = useState(null); // iso of the day currently being edited, or null
+  const [editingPerson, setEditingPerson] = useState(null); // whose entry editingDay refers to (admin can edit anyone's)
   const [viewPerson, setViewPerson] = useState(null); // { name, hours, iso, dateText }
 
   const gridRef = useRef(null);
@@ -413,17 +415,17 @@ export default function App() {
     }
   }
 
-  async function persistEntry(iso, entry) {
-    if (!name) return;
-    const key = `avail:${iso}:${name}`;
+  async function persistEntry(iso, entry, personName = name) {
+    if (!personName) return;
+    const key = `avail:${iso}:${personName}`;
     const note = (entry.note || "").trim();
     const isBlank = entry.hours.every((h) => h === null) && note === "";
     setDayData((prev) => {
       const dayEntries = { ...(prev[iso] || {}) };
       if (isBlank) {
-        delete dayEntries[name];
+        delete dayEntries[personName];
       } else {
-        dayEntries[name] = { hours: entry.hours, note };
+        dayEntries[personName] = { hours: entry.hours, note };
       }
       return { ...prev, [iso]: dayEntries };
     });
@@ -443,21 +445,26 @@ export default function App() {
     const opening = openDay !== iso;
     setOpenDay(opening ? iso : null);
     setEditingDay(null);
+    setEditingPerson(null);
     setSaved(false);
   }
 
   function selectDay(iso) {
     setOpenDay(iso);
     setEditingDay(null);
+    setEditingPerson(null);
     setSaved(false);
   }
 
-  function startEditing(iso) {
-    const existing = dayData[iso]?.[name];
+  // Admin can edit anyone's entry, so the person being edited (editingPerson)
+  // is tracked separately from the logged-in name -- defaults to your own.
+  function startEditing(iso, personName = name) {
+    const existing = dayData[iso]?.[personName];
     setMyHours(existing ? [...existing.hours] : blankHours());
     setMyNote(existing?.note || "");
     setShowNoteInput(!!existing?.note);
     setEditingDay(iso);
+    setEditingPerson(personName);
     setSaved(false);
   }
 
@@ -497,8 +504,9 @@ export default function App() {
   }
 
   async function saveMySchedule(iso) {
-    await persistEntry(iso, { hours: myHours, note: myNote });
+    await persistEntry(iso, { hours: myHours, note: myNote }, editingPerson || name);
     setEditingDay(null);
+    setEditingPerson(null);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -512,11 +520,12 @@ export default function App() {
   }
 
   async function deleteMySchedule(iso) {
-    await persistEntry(iso, { hours: blankHours(), note: "" });
+    await persistEntry(iso, { hours: blankHours(), note: "" }, editingPerson || name);
     setMyHours(blankHours());
     setMyNote("");
     setShowNoteInput(false);
     setEditingDay(null);
+    setEditingPerson(null);
     setSaved(false);
   }
 
@@ -646,6 +655,7 @@ export default function App() {
   }
 
   const today = days[0];
+  const isAdmin = name?.trim().toLowerCase() === ADMIN_NAME;
 
   const avatarButton = (
     <button
@@ -862,12 +872,16 @@ export default function App() {
               {isEditing ? (
                 <>
                   <div style={styles.gridHeaderRow}>
-                    <div style={styles.sectionLabel}>Tvoj urnik</div>
+                    <div style={styles.sectionLabel}>
+                      {editingPerson && editingPerson !== name
+                        ? `Urnik – ${editingPerson}`
+                        : "Tvoj urnik"}
+                    </div>
                     <div style={styles.headerButtonGroup}>
                       <button style={styles.clearButton} onClick={clearDraft}>
                         <Eraser size={12} /> Počisti
                       </button>
-                      {entries[name] && (
+                      {entries[editingPerson || name] && (
                         <button
                           style={styles.deleteButton}
                           onClick={() => deleteMySchedule(iso)}
@@ -973,7 +987,10 @@ export default function App() {
                   <div style={styles.editActionsRow}>
                     <button
                       style={styles.cancelButton}
-                      onClick={() => setEditingDay(null)}
+                      onClick={() => {
+                        setEditingDay(null);
+                        setEditingPerson(null);
+                      }}
                     >
                       Prekliči
                     </button>
@@ -1003,50 +1020,60 @@ export default function App() {
                           ? quickStatusText(e.hours, dayLabel(selectedIso, today))
                           : null;
                         return (
-                        <button
-                          key={n}
-                          style={styles.entryRow}
-                          onClick={() =>
-                            setViewPerson({
-                              name: n,
-                              hours: e.hours,
-                              note: e.note,
-                              dateText: selectedIso
-                                ? `${dayNumber(selectedIso)}. ${dayLabel(selectedIso, today)}`
-                                : "",
-                            })
-                          }
-                        >
-                          <span
-                            style={{
-                              ...styles.entryDot,
-                              background:
-                                dominantStatus(e.hours) === "free"
-                                  ? GREEN
-                                  : dominantStatus(e.hours) === "busy"
-                                  ? RED
-                                  : NEUTRAL_BG,
-                            }}
-                          />
-                          <span style={styles.entryTextCol}>
-                            <span style={styles.entryName}>
-                              {n}
-                              {n === name && (
-                                <span style={styles.entryYou}> (ti)</span>
-                              )}
-                              {quickStatus && (
-                                <span style={styles.entryQuickStatus}>
-                                  {" "}
-                                  - {quickStatus}
-                                </span>
+                        <div key={n} style={styles.entryRowWrap}>
+                          <button
+                            style={styles.entryRow}
+                            onClick={() =>
+                              setViewPerson({
+                                name: n,
+                                hours: e.hours,
+                                note: e.note,
+                                dateText: selectedIso
+                                  ? `${dayNumber(selectedIso)}. ${dayLabel(selectedIso, today)}`
+                                  : "",
+                              })
+                            }
+                          >
+                            <span
+                              style={{
+                                ...styles.entryDot,
+                                background:
+                                  dominantStatus(e.hours) === "free"
+                                    ? GREEN
+                                    : dominantStatus(e.hours) === "busy"
+                                    ? RED
+                                    : NEUTRAL_BG,
+                              }}
+                            />
+                            <span style={styles.entryTextCol}>
+                              <span style={styles.entryName}>
+                                {n}
+                                {n === name && (
+                                  <span style={styles.entryYou}> (ti)</span>
+                                )}
+                                {quickStatus && (
+                                  <span style={styles.entryQuickStatus}>
+                                    {" "}
+                                    - {quickStatus}
+                                  </span>
+                                )}
+                              </span>
+                              {e.note && (
+                                <span style={styles.entryNoteText}>{e.note}</span>
                               )}
                             </span>
-                            {e.note && (
-                              <span style={styles.entryNoteText}>{e.note}</span>
-                            )}
-                          </span>
-                          <ChevronRight size={15} color="#B3BBB5" />
-                        </button>
+                            <ChevronRight size={15} color="#B3BBB5" />
+                          </button>
+                          {(n === name || isAdmin) && (
+                            <button
+                              style={styles.editEntryButton}
+                              onClick={() => startEditing(iso, n)}
+                              aria-label={`Uredi vnos – ${n}`}
+                            >
+                              <Pencil size={13} />
+                            </button>
+                          )}
+                        </div>
                         );
                       })}
                     </div>
@@ -1153,12 +1180,16 @@ export default function App() {
                   {editingDay === iso ? (
                     <>
                       <div style={styles.gridHeaderRow}>
-                        <div style={styles.sectionLabel}>Tvoj urnik</div>
+                        <div style={styles.sectionLabel}>
+                          {editingPerson && editingPerson !== name
+                            ? `Urnik – ${editingPerson}`
+                            : "Tvoj urnik"}
+                        </div>
                         <div style={styles.headerButtonGroup}>
                           <button style={styles.clearButton} onClick={clearDraft}>
                             <Eraser size={12} /> Počisti
                           </button>
-                          {entries[name] && (
+                          {entries[editingPerson || name] && (
                             <button
                               style={styles.deleteButton}
                               onClick={() => deleteMySchedule(iso)}
@@ -1264,7 +1295,10 @@ export default function App() {
                       <div style={styles.editActionsRow}>
                         <button
                           style={styles.cancelButton}
-                          onClick={() => setEditingDay(null)}
+                          onClick={() => {
+                        setEditingDay(null);
+                        setEditingPerson(null);
+                      }}
                         >
                           Prekliči
                         </button>
@@ -1345,11 +1379,11 @@ export default function App() {
                                 </span>
                                 <ChevronRight size={15} color="#B3BBB5" />
                               </button>
-                              {n === name && (
+                              {(n === name || isAdmin) && (
                                 <button
                                   style={styles.editEntryButton}
-                                  onClick={() => startEditing(iso)}
-                                  aria-label="Uredi vnos"
+                                  onClick={() => startEditing(iso, n)}
+                                  aria-label={`Uredi vnos – ${n}`}
                                 >
                                   <Pencil size={13} />
                                 </button>
