@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Users, ChevronRight, Pencil, Eraser, Trash2 } from "lucide-react";
+import { Users, ChevronRight, Pencil, Eraser, Trash2, MessageSquare } from "lucide-react";
 
 const GREEN = "#2F6F5E";
 const GREEN_BG = "#E4F1EC";
@@ -67,6 +67,28 @@ function decodeHours(raw) {
   }
 }
 
+// Encode { hours, note } -> storage string: hours, plus an optional
+// '|'-separated, URI-encoded note (so raw '|' or newlines in the note
+// can't break parsing).
+function encodeEntry(entry) {
+  const hoursPart = encodeHours(entry.hours);
+  const note = (entry.note || "").trim();
+  return note ? `${hoursPart}|${encodeURIComponent(note)}` : hoursPart;
+}
+
+function decodeEntry(raw) {
+  if (!raw) return { hours: blankHours(), note: "" };
+  const sep = raw.indexOf("|");
+  if (sep === -1) return { hours: decodeHours(raw), note: "" };
+  let note = "";
+  try {
+    note = decodeURIComponent(raw.slice(sep + 1));
+  } catch (e) {
+    note = "";
+  }
+  return { hours: decodeHours(raw.slice(0, sep)), note };
+}
+
 function dominantStatus(hours) {
   let free = 0;
   let busy = 0;
@@ -121,9 +143,11 @@ export default function App() {
   const [nameDraft, setNameDraft] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [days, setDays] = useState([]);
-  const [dayData, setDayData] = useState({}); // { iso: { name: hoursArray } }
+  const [dayData, setDayData] = useState({}); // { iso: { name: { hours, note } } }
   const [openDay, setOpenDay] = useState(null);
   const [myHours, setMyHours] = useState(blankHours());
+  const [myNote, setMyNote] = useState("");
+  const [showNoteInput, setShowNoteInput] = useState(false);
   const [paintMode, setPaintMode] = useState("busy");
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -176,7 +200,7 @@ export default function App() {
             const got = await window.storage.get(k, true);
             if (got && got.value) {
               const person = k.slice(`avail:${iso}:`.length);
-              entries[person] = decodeHours(got.value);
+              entries[person] = decodeEntry(got.value);
             }
           } catch (e) {
             // skip missing key
@@ -217,16 +241,17 @@ export default function App() {
     }
   }
 
-  async function persistHours(iso, hours) {
+  async function persistEntry(iso, entry) {
     if (!name) return;
     const key = `avail:${iso}:${name}`;
-    const isBlank = hours.every((h) => h === null);
+    const note = (entry.note || "").trim();
+    const isBlank = entry.hours.every((h) => h === null) && note === "";
     setDayData((prev) => {
       const dayEntries = { ...(prev[iso] || {}) };
       if (isBlank) {
         delete dayEntries[name];
       } else {
-        dayEntries[name] = hours;
+        dayEntries[name] = { hours: entry.hours, note };
       }
       return { ...prev, [iso]: dayEntries };
     });
@@ -234,7 +259,7 @@ export default function App() {
       if (isBlank) {
         await window.storage.delete(key, true);
       } else {
-        await window.storage.set(key, encodeHours(hours), true);
+        await window.storage.set(key, encodeEntry({ hours: entry.hours, note }), true);
       }
     } catch (e) {
       setError("Spremembe ni bilo mogoče shraniti. Poskusi znova.");
@@ -256,7 +281,10 @@ export default function App() {
   }
 
   function startEditing(iso) {
-    setMyHours(dayData[iso]?.[name] ? [...dayData[iso][name]] : blankHours());
+    const existing = dayData[iso]?.[name];
+    setMyHours(existing ? [...existing.hours] : blankHours());
+    setMyNote(existing?.note || "");
+    setShowNoteInput(!!existing?.note);
     setEditingDay(iso);
     setSaved(false);
   }
@@ -297,7 +325,7 @@ export default function App() {
   }
 
   async function saveMySchedule(iso) {
-    await persistHours(iso, myHours);
+    await persistEntry(iso, { hours: myHours, note: myNote });
     setEditingDay(null);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -308,8 +336,10 @@ export default function App() {
   }
 
   async function deleteMySchedule(iso) {
-    await persistHours(iso, blankHours());
+    await persistEntry(iso, { hours: blankHours(), note: "" });
     setMyHours(blankHours());
+    setMyNote("");
+    setShowNoteInput(false);
     setEditingDay(null);
     setSaved(false);
   }
@@ -366,6 +396,9 @@ export default function App() {
           <div>
             <div style={styles.modalEyebrow}>{viewPerson.dateText}</div>
             <div style={styles.modalTitle}>{viewPerson.name}</div>
+            {viewPerson.note && (
+              <div style={styles.modalNote}>{viewPerson.note}</div>
+            )}
           </div>
           <button style={styles.modalClose} onClick={() => setViewPerson(null)}>
             Zapri
@@ -485,8 +518,8 @@ export default function App() {
                 const dIso = isoDate(d);
                 const dEntries = dayData[dIso] || {};
                 const people = Object.entries(dEntries).filter(([n]) => n !== name);
-                const freePeople = people.filter(([, h]) => dominantStatus(h) === "free");
-                const busyPeople = people.filter(([, h]) => dominantStatus(h) === "busy");
+                const freePeople = people.filter(([, e]) => dominantStatus(e.hours) === "free");
+                const busyPeople = people.filter(([, e]) => dominantStatus(e.hours) === "busy");
                 const isSelected = dIso === iso;
                 return (
                   <button
@@ -568,6 +601,36 @@ export default function App() {
                     počisti.
                   </p>
 
+                  {showNoteInput ? (
+                    <div style={styles.noteBlock}>
+                      <textarea
+                        autoFocus
+                        style={styles.noteTextarea}
+                        rows={2}
+                        maxLength={140}
+                        placeholder='npr. "sem za druženje", "na jošta", "bi šel kdo na pivo ob 18ih"'
+                        value={myNote}
+                        onChange={(e) => setMyNote(e.target.value)}
+                      />
+                      <button
+                        style={styles.noteRemoveButton}
+                        onClick={() => {
+                          setMyNote("");
+                          setShowNoteInput(false);
+                        }}
+                      >
+                        Odstrani opombo
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      style={styles.addNoteButton}
+                      onClick={() => setShowNoteInput(true)}
+                    >
+                      <MessageSquare size={12} /> Dodaj opombo
+                    </button>
+                  )}
+
                   <div
                     ref={gridRef}
                     style={styles.hourGridDesktop}
@@ -625,14 +688,15 @@ export default function App() {
                   ) : (
                     <div style={styles.peopleSection}>
                       <div style={styles.sectionLabel}>Vneseni vnosi</div>
-                      {allEntries.map(([n, h]) => (
+                      {allEntries.map(([n, e]) => (
                         <button
                           key={n}
                           style={styles.entryRow}
                           onClick={() =>
                             setViewPerson({
                               name: n,
-                              hours: h,
+                              hours: e.hours,
+                              note: e.note,
                               dateText: selectedDate
                                 ? `${selectedDate.getDate()}. ${dayLabel(selectedDate, today)}`
                                 : "",
@@ -643,17 +707,22 @@ export default function App() {
                             style={{
                               ...styles.entryDot,
                               background:
-                                dominantStatus(h) === "free"
+                                dominantStatus(e.hours) === "free"
                                   ? GREEN
-                                  : dominantStatus(h) === "busy"
+                                  : dominantStatus(e.hours) === "busy"
                                   ? RED
                                   : NEUTRAL_BG,
                             }}
                           />
-                          <span style={styles.entryName}>
-                            {n}
-                            {n === name && (
-                              <span style={styles.entryYou}> (ti)</span>
+                          <span style={styles.entryTextCol}>
+                            <span style={styles.entryName}>
+                              {n}
+                              {n === name && (
+                                <span style={styles.entryYou}> (ti)</span>
+                              )}
+                            </span>
+                            {e.note && (
+                              <span style={styles.entryNoteText}>{e.note}</span>
                             )}
                           </span>
                           <ChevronRight size={15} color="#B3BBB5" />
@@ -740,8 +809,8 @@ export default function App() {
           const allEntries = Object.entries(entries).sort(([a], [b]) =>
             a === name ? -1 : b === name ? 1 : a.localeCompare(b)
           );
-          const freePeople = people.filter(([, h]) => dominantStatus(h) === "free");
-          const busyPeople = people.filter(([, h]) => dominantStatus(h) === "busy");
+          const freePeople = people.filter(([, e]) => dominantStatus(e.hours) === "free");
+          const busyPeople = people.filter(([, e]) => dominantStatus(e.hours) === "busy");
           const isOpen = openDay === iso;
 
           return (
@@ -823,6 +892,36 @@ export default function App() {
                         jo počisti.
                       </p>
 
+                      {showNoteInput ? (
+                        <div style={styles.noteBlock}>
+                          <textarea
+                            autoFocus
+                            style={styles.noteTextarea}
+                            rows={2}
+                            maxLength={140}
+                            placeholder='npr. "sem za druženje", "na jošta", "bi šel kdo na pivo ob 18ih"'
+                            value={myNote}
+                            onChange={(e) => setMyNote(e.target.value)}
+                          />
+                          <button
+                            style={styles.noteRemoveButton}
+                            onClick={() => {
+                              setMyNote("");
+                              setShowNoteInput(false);
+                            }}
+                          >
+                            Odstrani opombo
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          style={styles.addNoteButton}
+                          onClick={() => setShowNoteInput(true)}
+                        >
+                          <MessageSquare size={12} /> Dodaj opombo
+                        </button>
+                      )}
+
                       <div
                         ref={gridRef}
                         style={styles.hourGrid}
@@ -888,14 +987,15 @@ export default function App() {
                       ) : (
                         <div style={styles.peopleSection}>
                           <div style={styles.sectionLabel}>Vneseni vnosi</div>
-                          {allEntries.map(([n, h]) => (
+                          {allEntries.map(([n, e]) => (
                             <div key={n} style={styles.entryRowWrap}>
                               <button
                                 style={styles.entryRow}
                                 onClick={() =>
                                   setViewPerson({
                                     name: n,
-                                    hours: h,
+                                    hours: e.hours,
+                                    note: e.note,
                                     dateText: `${d.getDate()}. ${dayLabel(d, today)}`,
                                   })
                                 }
@@ -904,17 +1004,22 @@ export default function App() {
                                   style={{
                                     ...styles.entryDot,
                                     background:
-                                      dominantStatus(h) === "free"
+                                      dominantStatus(e.hours) === "free"
                                         ? GREEN
-                                        : dominantStatus(h) === "busy"
+                                        : dominantStatus(e.hours) === "busy"
                                         ? RED
                                         : NEUTRAL_BG,
                                   }}
                                 />
-                                <span style={styles.entryName}>
-                                  {n}
-                                  {n === name && (
-                                    <span style={styles.entryYou}> (ti)</span>
+                                <span style={styles.entryTextCol}>
+                                  <span style={styles.entryName}>
+                                    {n}
+                                    {n === name && (
+                                      <span style={styles.entryYou}> (ti)</span>
+                                    )}
+                                  </span>
+                                  {e.note && (
+                                    <span style={styles.entryNoteText}>{e.note}</span>
                                   )}
                                 </span>
                                 <ChevronRight size={15} color="#B3BBB5" />
@@ -1295,6 +1400,49 @@ const styles = {
     margin: "0 0 10px 0",
     lineHeight: 1.4,
   },
+  addNoteButton: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: GREEN,
+    background: GREEN_BG,
+    border: "none",
+    borderRadius: 8,
+    padding: "7px 10px",
+    marginBottom: 14,
+    cursor: "pointer",
+  },
+  noteBlock: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    marginBottom: 14,
+  },
+  noteTextarea: {
+    width: "100%",
+    boxSizing: "border-box",
+    resize: "vertical",
+    padding: "9px 11px",
+    fontSize: 13.5,
+    fontFamily: "inherit",
+    borderRadius: 10,
+    border: "1.5px solid #E3E1D9",
+    outline: "none",
+    background: "#FDFCFA",
+    color: "#233029",
+  },
+  noteRemoveButton: {
+    alignSelf: "flex-start",
+    fontSize: 11.5,
+    fontWeight: 600,
+    color: RED,
+    background: "transparent",
+    border: "none",
+    padding: "2px 0",
+    cursor: "pointer",
+  },
   hourGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(6, 1fr)",
@@ -1427,11 +1575,25 @@ const styles = {
     borderRadius: "50%",
     flexShrink: 0,
   },
-  entryName: {
+  entryTextCol: {
     flex: 1,
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  entryName: {
     fontSize: 14,
     fontWeight: 600,
     color: "#374840",
+  },
+  entryNoteText: {
+    fontSize: 12,
+    color: "#7C8A83",
+    fontStyle: "italic",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   entryYou: {
     fontSize: 12,
@@ -1475,6 +1637,12 @@ const styles = {
     fontSize: 19,
     fontWeight: 800,
     color: "#1B2E24",
+  },
+  modalNote: {
+    fontSize: 13,
+    color: "#5B6862",
+    fontStyle: "italic",
+    marginTop: 4,
   },
   modalClose: {
     fontSize: 12.5,
