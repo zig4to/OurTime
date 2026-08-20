@@ -1227,7 +1227,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    padding: "12px 20px 24px 20px",
+    padding: "20px 20px 24px 20px",
   },
   eyebrow: {
     fontSize: 11,
