@@ -1792,10 +1792,13 @@ export default function App() {
             {avatarButton}
           </header>
 
-          {recentEventsRow}
-
+          {/* Above the event strip, not below it: the form belongs to the
+              greeting the pencil sits in, and opening it under a strip that is
+              itself sliding every 5s put it somewhere the eye had just left. */}
           {nameEditRow}
           {nameClashRow}
+
+          {recentEventsRow}
 
           {error && <div style={styles.errorBanner}>{error}</div>}
 
@@ -2095,10 +2098,13 @@ export default function App() {
         {avatarButton}
       </header>
 
-      {recentEventsRow}
-
+      {/* Above the event strip, not below it: the form belongs to the
+          greeting the pencil sits in, and opening it under a strip that is
+          itself sliding every 5s put it somewhere the eye had just left. */}
       {nameEditRow}
       {nameClashRow}
+
+      {recentEventsRow}
 
       {error && <div style={styles.errorBanner}>{error}</div>}
 

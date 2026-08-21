@@ -175,7 +175,9 @@ export const styles = {
     display: "flex",
     flexDirection: "column",
     gap: 8,
-    padding: "0 20px 8px 20px",
+    // Roomier below than the 8px it used to have: the form now opens directly
+    // above the event strip's heading, and 8px left the two crowding.
+    padding: "0 20px 18px 20px",
   },
   clashRow: {
     display: "flex",
