@@ -258,14 +258,22 @@ export const styles = {
     padding: "0 20px",
     marginBottom: 10,
   },
-  recentEventsViewport: {
+  recentEventsViewport: (canSlide, dragging) => ({
     overflow: "hidden",
     padding: "0 15px 18px 15px",
-  },
-  recentEventsTrack: (extendedCount, offset, animate) => ({
+    // Claim horizontal gestures for the strip but leave vertical ones to the
+    // page, so swiping a card never traps the page scroll on a phone.
+    touchAction: canSlide ? "pan-y" : "auto",
+    cursor: canSlide ? (dragging ? "grabbing" : "grab") : "default",
+    // A mouse drag across text would otherwise select it mid-swipe.
+    userSelect: dragging ? "none" : "auto",
+  }),
+  recentEventsTrack: (extendedCount, index, animate, dragPx) => ({
     display: "flex",
     width: `${(extendedCount / 3) * 100}%`,
-    transform: `translateX(-${offset * (100 / extendedCount)}%)`,
+    // The slot offset is a percentage of the (much wider) track, while the
+    // drag arrives as raw viewport pixels; calc() is what lets the two mix.
+    transform: `translateX(calc(-${index * (100 / extendedCount)}% + ${dragPx}px))`,
     transition: animate ? "transform 500ms ease" : "none",
   }),
   recentEventSlot: (percent) => ({

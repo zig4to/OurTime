@@ -385,48 +385,122 @@ function useIsDesktop(breakpoint = 860) {
   }, [breakpoint]);
   return isDesktop;
 }
+const CARDS_IN_VIEW = 3;
 
-// Auto-advancing "Aktualni dogodki" strip: shows 3 cards, and every 5s slides
-// one card-width left to reveal the next event, wrapping back to the start.
-// The wrap is seamless: a copy of the first 3 events is appended after the
-// real list, so the slide *into* that copy looks identical to sliding into
-// the real first 3 -- once that copy is fully in view, the offset snaps back
-// to 0 with the transition briefly disabled, which is visually a no-op.
+// Below this the gesture reads as a tap or a stray wobble, not a swipe, and
+// the strip springs back to where it was.
+const SWIPE_THRESHOLD_PX = 40;
+
+// "Aktualni dogodki" strip: shows 3 cards, advances one card-width every 5s,
+// and can also be dragged by mouse or finger. Both directions wrap seamlessly,
+// which is what the padding on `extended` is for: a copy of the last 3 events
+// sits before the real list and a copy of the first 3 after it, so sliding off
+// either end lands on cards that look exactly like the ones being wrapped to.
+// Once such a copy is fully in view, `index` snaps to the matching real card
+// with the transition briefly disabled -- visually a no-op. Real event 0
+// therefore lives at slot CARDS_IN_VIEW, not slot 0, which is why `base` shows
+// up everywhere below instead of a plain 0.
 function RecentEventsCarousel({ events }) {
-  const [offset, setOffset] = useState(0);
+  const count = events.length;
+  const canSlide = count > CARDS_IN_VIEW;
+  const base = canSlide ? CARDS_IN_VIEW : 0;
+
+  const [index, setIndex] = useState(base);
   const [animate, setAnimate] = useState(true);
+  const [dragPx, setDragPx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef(null);
+  const viewportRef = useRef(null);
 
+  // Re-center whenever the list itself changes length, so an index left over
+  // from a longer list can't park the strip on padding slots.
   useEffect(() => {
-    if (events.length <= 3) return;
-    const timer = setInterval(() => setOffset((o) => o + 1), 5000);
+    setAnimate(false);
+    setIndex(base);
+  }, [count, base]);
+
+  // Auto-advance. Restarting on `dragging` doubles as the pause: letting go
+  // starts a fresh 5s rather than firing whatever was left of the old one.
+  useEffect(() => {
+    if (!canSlide || dragging) return;
+    const timer = setInterval(() => setIndex((i) => i + 1), 5000);
     return () => clearInterval(timer);
-  }, [events.length]);
+  }, [canSlide, dragging]);
 
+  // Sitting on a padding slot: let the slide finish, then jump to the real
+  // card it was a copy of.
   useEffect(() => {
-    if (offset < events.length) return;
+    if (!canSlide) return;
+    if (index >= base && index < base + count) return;
+    const target = index >= base + count ? base : base + count - 1;
     const t = setTimeout(() => {
       setAnimate(false);
-      setOffset(0);
+      setIndex(target);
     }, 520); // just past the 500ms slide transition
     return () => clearTimeout(t);
-  }, [offset, events.length]);
+  }, [index, base, count, canSlide]);
 
+  // Any setAnimate(false) above is only meant to cover a single instant jump,
+  // so re-arm the transition on the next frame.
   useEffect(() => {
     if (animate) return;
     const raf = requestAnimationFrame(() => setAnimate(true));
     return () => cancelAnimationFrame(raf);
   }, [animate]);
 
-  if (events.length === 0) return null;
+  function handlePointerDown(e) {
+    if (!canSlide) return;
+    dragRef.current = e.clientX;
+    setDragging(true);
+    setAnimate(false); // follow the finger 1:1 instead of easing behind it
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
 
-  const extended = events.length > 3 ? events.concat(events.slice(0, 3)) : events;
+  function handlePointerMove(e) {
+    if (dragRef.current === null) return;
+    setDragPx(e.clientX - dragRef.current);
+  }
+
+  function handlePointerUp(e) {
+    if (dragRef.current === null) return;
+    const dx = e.clientX - dragRef.current;
+    dragRef.current = null;
+    setDragPx(0);
+    setAnimate(true);
+    setDragging(false);
+    // One gesture moves one card however far it travelled: the cards are only
+    // a third of a phone screen wide, so a long flick meaning "jump four
+    // ahead" is far less likely than one that just overshot.
+    if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) setIndex((i) => i + (dx < 0 ? 1 : -1));
+  }
+
+  function handlePointerCancel() {
+    if (dragRef.current === null) return;
+    dragRef.current = null;
+    setDragPx(0);
+    setAnimate(true);
+    setDragging(false);
+  }
+
+  if (count === 0) return null;
+
+  const extended = canSlide
+    ? [...events.slice(-CARDS_IN_VIEW), ...events, ...events.slice(0, CARDS_IN_VIEW)]
+    : events;
   const slotPercent = 100 / extended.length;
 
   return (
     <>
       <div style={styles.recentEventsHeading}>Aktualni dogodki</div>
-      <div style={styles.recentEventsViewport}>
-        <div style={styles.recentEventsTrack(extended.length, offset, animate)}>
+      <div
+        ref={viewportRef}
+        style={styles.recentEventsViewport(canSlide, dragging)}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+      >
+        <div style={styles.recentEventsTrack(extended.length, index, animate, dragPx)}>
           {extended.map((ev, i) => (
             <div key={`${ev.id}-${i}`} style={styles.recentEventSlot(slotPercent)}>
               <div style={styles.recentEventCard(colorForEvent(ev))}>
