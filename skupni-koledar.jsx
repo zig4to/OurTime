@@ -133,6 +133,43 @@ export function dayAnchorId(iso) {
   return `day-${iso}`;
 }
 
+// Breathing room left above a day scrolled to from the event strip. Landing
+// flush against the top edge reads as clipped rather than as arrival. Matches
+// the day list's horizontal padding, so the gap is the same on every side.
+const SCROLL_ANCHOR_MARGIN = 16;
+
+// Deliberately arithmetic rather than scrollIntoView + scroll-margin-top: the
+// margin is simply ignored here (measured -- the day lands flush at any
+// scroll-margin, including 100px), and scroll-margin is the newer property of
+// the two on iOS Safari besides.
+//
+// alignTop is for the mobile accordion, where the day is a row part-way down
+// a long list and pulling it to the top is the point. The desktop panel sits
+// beside the day grid and is usually already on screen, so there it only gets
+// nudged, and only as far as it takes to see it.
+function scrollDayIntoView(iso, alignTop) {
+  const el = document.getElementById(dayAnchorId(iso));
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+
+  if (alignTop) {
+    window.scrollTo({
+      top: rect.top + window.scrollY - SCROLL_ANCHOR_MARGIN,
+      behavior: "smooth",
+    });
+    return;
+  }
+
+  if (rect.top >= SCROLL_ANCHOR_MARGIN && rect.bottom <= window.innerHeight) return;
+  const delta =
+    rect.top < SCROLL_ANCHOR_MARGIN
+      ? rect.top - SCROLL_ANCHOR_MARGIN
+      : // Scroll down far enough to reveal the bottom, but never so far that
+        // the panel's own top slides above the margin.
+        Math.min(rect.bottom - window.innerHeight, rect.top - SCROLL_ANCHOR_MARGIN);
+  window.scrollTo({ top: window.scrollY + delta, behavior: "smooth" });
+}
+
 export function dayLabel(iso, today) {
   if (iso === today) return "Danes";
   if (iso === addDays(today, 1)) return "Jutri";
@@ -680,14 +717,7 @@ export default function App() {
 
   useEffect(() => {
     if (!scrollToDay) return;
-    const el = document.getElementById(dayAnchorId(scrollToDay));
-    // On mobile the day is an accordion row further down a long list, so pull
-    // it to the top. On desktop it is a panel already sitting beside the day
-    // grid: "nearest" scrolls only if it happens to be off screen, instead of
-    // yanking a page that was fine where it was.
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: isDesktop ? "nearest" : "start" });
-    }
+    scrollDayIntoView(scrollToDay, !isDesktop);
     setScrollToDay(null);
   }, [scrollToDay, isDesktop]);
 
