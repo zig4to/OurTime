@@ -97,7 +97,7 @@ const ljubljanaParts = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 });
 
-function todayIso() {
+export function todayIso() {
   const parts = ljubljanaParts.formatToParts(new Date());
   const part = (type) => parts.find((p) => p.type === type)?.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
@@ -105,29 +105,29 @@ function todayIso() {
 
 // Date maths is done at UTC midnight so Ljubljana's DST switch (where a local
 // day is 23 or 25 hours long) can never add or drop a day.
-function utcFromIso(iso) {
+export function utcFromIso(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d));
 }
 
-function addDays(iso, n) {
+export function addDays(iso, n) {
   const dt = utcFromIso(iso);
   dt.setUTCDate(dt.getUTCDate() + n);
   return dt.toISOString().slice(0, 10);
 }
 
-function dayNumber(iso) {
+export function dayNumber(iso) {
   return Number(iso.slice(8, 10));
 }
 
-function dayLabel(iso, today) {
+export function dayLabel(iso, today) {
   const names = ["ned", "pon", "tor", "sre", "čet", "pet", "sob"];
   if (iso === today) return "Danes";
   if (iso === addDays(today, 1)) return "Jutri";
   return names[utcFromIso(iso).getUTCDay()];
 }
 
-function initials(name) {
+export function initials(name) {
   return name
     .trim()
     .split(/\s+/)
@@ -136,50 +136,50 @@ function initials(name) {
     .join("");
 }
 
-function capitalize(word) {
+export function capitalize(word) {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 // The full "Ime Priimek" string is the identity, so it gets normalised on the
 // way in: without this, "tina brdnik" and "Tina Brdnik" would become two
 // different people with two separate sets of entries.
-function normalizeName(first, last) {
+export function normalizeName(first, last) {
   const clean = (s) => (s || "").trim().replace(/\s+/g, " ");
   return `${capitalize(clean(first))} ${capitalize(clean(last))}`.trim();
 }
 
-function splitName(full) {
+export function splitName(full) {
   const parts = (full || "").trim().split(/\s+/).filter(Boolean);
   return { first: parts[0] || "", last: parts.slice(1).join(" ") };
 }
 
-function hasSurname(full) {
+export function hasSurname(full) {
   return (full || "").trim().split(/\s+/).filter(Boolean).length >= 2;
 }
 
 // Keys look like "avail:2026-08-20:Ime Priimek"; everything past the second
 // colon is the person, so names containing a colon survive the round trip.
-function personFromKey(key) {
+export function personFromKey(key) {
   const parts = key.split(":");
   return parts.length >= 3 ? parts.slice(2).join(":") : null;
 }
 
-function isoFromKey(key) {
+export function isoFromKey(key) {
   return key.split(":")[1] || null;
 }
 
-function blankHours() {
+export function blankHours() {
   return Array(24).fill(null);
 }
 
 // Encode hours array -> compact 24-char string: 'f' free, 'b' busy, '.' unset
-function encodeHours(hours) {
+export function encodeHours(hours) {
   return hours.map((h) => (h === "free" ? "f" : h === "busy" ? "b" : ".")).join("");
 }
 
 // Decode storage value -> 24-length hours array. Handles the current
 // 24-char format plus a couple of older formats for backward compatibility.
-function decodeHours(raw) {
+export function decodeHours(raw) {
   if (!raw) return blankHours();
   if (raw.length === 24 && /^[fb.]+$/.test(raw)) {
     return raw.split("").map((c) => (c === "f" ? "free" : c === "b" ? "busy" : null));
@@ -205,13 +205,13 @@ function decodeHours(raw) {
 // Encode { hours, note } -> storage string: hours, plus an optional
 // '|'-separated, URI-encoded note (so raw '|' or newlines in the note
 // can't break parsing).
-function encodeEntry(entry) {
+export function encodeEntry(entry) {
   const hoursPart = encodeHours(entry.hours);
   const note = (entry.note || "").trim();
   return note ? `${hoursPart}|${encodeURIComponent(note)}` : hoursPart;
 }
 
-function decodeEntry(raw) {
+export function decodeEntry(raw) {
   if (!raw) return { hours: blankHours(), note: "" };
   const sep = raw.indexOf("|");
   if (sep === -1) return { hours: decodeHours(raw), note: "" };
@@ -232,15 +232,15 @@ function decodeEntry(raw) {
 // (a creation timestamp, which also gives events their display order).
 const EVENT_MARKER = "__event__";
 
-function eventKey(iso, id) {
+export function eventKey(iso, id) {
   return `avail:${iso}:${EVENT_MARKER}${id}`;
 }
 
-function encodeEvent(ev) {
+export function encodeEvent(ev) {
   return JSON.stringify(ev);
 }
 
-function decodeEvent(raw, id) {
+export function decodeEvent(raw, id) {
   try {
     const parsed = JSON.parse(raw);
     return {
@@ -258,14 +258,16 @@ function decodeEvent(raw, id) {
 
 // duration is stored as a single "HH:MM–HH:MM" display string; split it back
 // into the two <input type="time"> values when re-opening the edit form.
-function splitDuration(duration) {
+// Accepts a plain hyphen too, since some events were saved before the en
+// dash format was standardized.
+export function splitDuration(duration) {
   if (!duration) return { start: "", end: "" };
-  const [start, end] = duration.split("–");
+  const [start, end] = duration.split(/\s*[–-]\s*/);
   return { start: (start || "").trim(), end: (end || "").trim() };
 }
 
 // Short inline summary shown next to a person's name, e.g. "danes prost".
-function quickStatusText(hours, dayLabelText) {
+export function quickStatusText(hours, dayLabelText) {
   const anySet = hours.some((h) => h !== null);
   if (!anySet) return null;
   const allFree = hours.every((h) => h === "free");
@@ -281,17 +283,17 @@ function quickStatusText(hours, dayLabelText) {
 // cel dan"), orange for anything in between -- partial, mixed, or nothing
 // set at all. Red is reserved for an explicit whole-day busy mark so it
 // isn't confused with "hasn't really said yet."
-function freeBusyTier(hours) {
+export function freeBusyTier(hours) {
   if (hours.every((h) => h === "free")) return "free";
   if (hours.every((h) => h === "busy")) return "busy";
   return "partial";
 }
 
-function tierColor(tier) {
+export function tierColor(tier) {
   return tier === "free" ? GREEN : tier === "busy" ? RED : ORANGE;
 }
 
-function dominantStatus(hours) {
+export function dominantStatus(hours) {
   let free = 0;
   let busy = 0;
   hours.forEach((h) => {
@@ -304,7 +306,7 @@ function dominantStatus(hours) {
 
 // Turn an hours array into readable contiguous ranges, e.g.
 // [null,null,'busy','busy',...] -> [{ from: 2, to: 4, status: 'busy' }, ...]
-function groupSegments(hours) {
+export function groupSegments(hours) {
   const segments = [];
   let i = 0;
   while (i < 24) {
@@ -321,11 +323,11 @@ function groupSegments(hours) {
   return segments;
 }
 
-function fmtHour(h) {
+export function fmtHour(h) {
   return `${String(h % 24).padStart(2, "0")}:00`;
 }
 
-function entryCountLabel(n) {
+export function entryCountLabel(n) {
   if (n === 0) return "Še nihče ni vnesel";
   if (n === 1) return "1 vnos";
   if (n >= 2 && n <= 4) return `${n} vnosi`;
@@ -702,9 +704,11 @@ export default function App() {
   }
 
   // id === null means "new event" -- the form starts blank instead of
-  // loading an existing one.
+  // loading an existing one. Checked with != null rather than truthiness:
+  // events created before per-day ids existed have id === "" (a legacy
+  // empty-suffix storage key), which is a valid id, not "no id".
   function startEditingEvent(iso, id = null) {
-    const existing = id ? dayEvents[iso]?.find((e) => e.id === id) : null;
+    const existing = id != null ? dayEvents[iso]?.find((e) => e.id === id) : null;
     setEventTitleDraft(existing?.title || "");
     setEventDescDraft(existing?.description || "");
     setShowEventDescInput(!!existing?.description);
@@ -726,8 +730,8 @@ export default function App() {
   async function saveEvent(iso, id) {
     const title = eventTitleDraft.trim();
     if (!title || !name) return;
-    const existing = id ? dayEvents[iso]?.find((e) => e.id === id) : null;
-    const eventId = id || String(Date.now());
+    const existing = id != null ? dayEvents[iso]?.find((e) => e.id === id) : null;
+    const eventId = id != null ? id : String(Date.now());
     const duration =
       eventStartDraft && eventEndDraft
         ? `${eventStartDraft}–${eventEndDraft}`
@@ -1107,7 +1111,7 @@ export default function App() {
     const isEditingHere = editingEvent && editingEvent.iso === iso;
 
     function eventForm(id) {
-      const existing = id ? events.find((e) => e.id === id) : null;
+      const existing = id != null ? events.find((e) => e.id === id) : null;
       return (
         <div style={styles.eventCard} key={id || "new"}>
           <div style={styles.eventEyebrow}>Dogodek</div>
