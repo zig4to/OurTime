@@ -383,6 +383,55 @@ export function decodeEvent(raw, id) {
 // into the two <input type="time"> values when re-opening the edit form.
 // Accepts a plain hyphen too, since some events were saved before the en
 // dash format was standardized.
+// Comments live in their own rows rather than inside the event JSON. Posting
+// one is then an insert of a fresh key instead of a read-modify-write of the
+// event, so two people commenting in the same moment cannot overwrite each
+// other -- and text someone typed is a worse thing to lose than a toggle.
+const COMMENT_MARKER = "__comment__";
+
+export function commentKey(iso, eventId, commentId) {
+  return `avail:${iso}:${COMMENT_MARKER}${eventId}:${commentId}`;
+}
+
+// One event's thread, addressed the same way everywhere it is held.
+export function commentGroup(iso, eventId) {
+  return `${iso}:${eventId}`;
+}
+
+// Splits the person part of a comment key back into its two ids, on the last
+// colon rather than the first. A comment id is always a timestamp and carries
+// no colon, so everything before the final one is the event id -- including
+// nothing at all, which is what events created before per-day ids existed
+// have. Splitting on the first colon would leave those events unable to hold
+// a comment at all.
+export function parseCommentPerson(person) {
+  if (!person.startsWith(COMMENT_MARKER)) return null;
+  const rest = person.slice(COMMENT_MARKER.length);
+  const at = rest.lastIndexOf(":");
+  if (at < 0 || at === rest.length - 1) return null;
+  return { eventId: rest.slice(0, at), commentId: rest.slice(at + 1) };
+}
+
+export function encodeComment(comment) {
+  return JSON.stringify({ author: comment.author, text: comment.text });
+}
+
+export function decodeComment(raw, id) {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.text !== "string") return null;
+    return { id, author: parsed.author || "", text: parsed.text };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Oldest first, so a thread reads downwards. Ids are timestamps; the string
+// compare is the tie-break for two posted in the same millisecond.
+export function sortComments(list) {
+  return [...list].sort((a, b) => Number(a.id) - Number(b.id) || a.id.localeCompare(b.id));
+}
+
 export function splitDuration(duration) {
   if (!duration) return { start: "", end: "" };
   const [start, end] = duration.split(/\s*[–-]\s*/);
@@ -865,6 +914,13 @@ export default function App() {
   // Attendee chips currently playing an animation: chip id -> "in" | "out".
   // Only ever holds the one or two chips mid-flight; entries are cleared as
   // each animation lands.
+  // { "iso:eventId": [{ id, author, text }] } -- flat rather than nested per
+  // day, because a thread is only ever read and written as a whole.
+  const [dayComments, setDayComments] = useState({});
+  // Only one thread is open at a time; a card is small and two expanded
+  // threads in one day would push the rest of it off screen.
+  const [openComments, setOpenComments] = useState(null);
+  const [commentDrafts, setCommentDrafts] = useState({});
   const [chipAnim, setChipAnim] = useState({});
   // Names already gone from an event's attendees but still on screen playing
   // their exit: "iso:eventId" -> [person]. Same lifetime as the "out" flag
@@ -953,6 +1009,7 @@ export default function App() {
       const res = await window.storage.range(fromKey, toKey, true);
       const result = {};
       const events = {};
+      const comments = {};
       for (const iso of days) {
         result[iso] = {};
         events[iso] = [];
@@ -961,6 +1018,15 @@ export default function App() {
         const iso = isoFromKey(row.key);
         const person = personFromKey(row.key);
         if (!person || !(iso in result)) continue;
+        if (person.startsWith(COMMENT_MARKER)) {
+          const parsed = parseCommentPerson(person);
+          const comment = parsed && decodeComment(row.value, parsed.commentId);
+          if (comment) {
+            const group = commentGroup(iso, parsed.eventId);
+            (comments[group] = comments[group] || []).push(comment);
+          }
+          continue;
+        }
         if (person.startsWith(EVENT_MARKER)) {
           const id = person.slice(EVENT_MARKER.length);
           const ev = decodeEvent(row.value, id);
@@ -972,8 +1038,12 @@ export default function App() {
       for (const iso of days) {
         events[iso].sort((a, b) => Number(a.id) - Number(b.id));
       }
+      for (const group of Object.keys(comments)) {
+        comments[group] = sortComments(comments[group]);
+      }
       setDayData(result);
       setDayEvents(events);
+      setDayComments(comments);
       setError(null);
     } catch (e) {
       setError("Podatkov ni bilo mogoče naložiti. Poskusi znova.");
@@ -1019,6 +1089,28 @@ export default function App() {
           const iso = isoFromKey(key);
           const person = personFromKey(key);
           if (!iso || !person || !daysRef.current.includes(iso)) return;
+
+          if (person.startsWith(COMMENT_MARKER)) {
+            const parsed = parseCommentPerson(person);
+            if (!parsed) return;
+            const group = commentGroup(iso, parsed.eventId);
+            setDayComments((prev) => {
+              const list = prev[group] || [];
+              if (type === "DELETE") {
+                return { ...prev, [group]: list.filter((c) => c.id !== parsed.commentId) };
+              }
+              const comment = decodeComment(value, parsed.commentId);
+              if (!comment) return prev;
+              // Your own post arrives back as a message too. Matching on id
+              // rather than appending is what makes that echo a no-op instead
+              // of a second copy of what you just wrote.
+              const next = list.some((c) => c.id === comment.id)
+                ? list.map((c) => (c.id === comment.id ? comment : c))
+                : [...list, comment];
+              return { ...prev, [group]: sortComments(next) };
+            });
+            return;
+          }
 
           if (person.startsWith(EVENT_MARKER)) {
             const id = person.slice(EVENT_MARKER.length);
@@ -1444,6 +1536,28 @@ export default function App() {
     }, CHIP_EXIT_MS);
   }
 
+  async function postComment(iso, eventId) {
+    const group = commentGroup(iso, eventId);
+    const text = (commentDrafts[group] || "").trim();
+    if (!text || !name) return;
+    const comment = { id: String(Date.now()), author: name, text };
+    setDayComments((prev) => ({
+      ...prev,
+      [group]: sortComments([...(prev[group] || []), comment]),
+    }));
+    setCommentDrafts((prev) => ({ ...prev, [group]: "" }));
+    try {
+      await window.storage.set(
+        commentKey(iso, eventId, comment.id),
+        encodeComment(comment),
+        true
+      );
+    } catch (e) {
+      setError("Komentarja ni bilo mogoče objaviti. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
   async function toggleAttendance(iso, id) {
     const existing = dayEvents[iso]?.find((e) => e.id === id);
     if (!existing || !name) return;
@@ -1625,6 +1739,9 @@ export default function App() {
     // Event attendees too: someone can say "Da" to an event without ever
     // filing their availability, and they still need a color to be drawn in.
     ...Object.values(dayEvents).flatMap((evs) => evs.flatMap((ev) => ev.attendees)),
+    // And whoever wrote a comment: their initials are drawn beside it, and
+    // someone can have commented without ever attending or filing a day.
+    ...Object.values(dayComments).flatMap((list) => list.map((c) => c.author)),
   ]);
 
   const recentEventsRow = (
@@ -1927,6 +2044,10 @@ export default function App() {
           // rejoined before their own exit finished -- they are a real
           // attendee again, and rendering both copies would collide on key.
           const ghosts = ghostChips[eventChipGroup(iso, event.id)] || [];
+          const commentsKey = commentGroup(iso, event.id);
+          const comments = dayComments[commentsKey] || [];
+          const commentsOpen = openComments === commentsKey;
+          const commentDraft = commentDrafts[commentsKey] || "";
           const shownAttendees = ghosts.length
             ? [...event.attendees, ...ghosts.filter((n) => !event.attendees.includes(n))]
             : event.attendees;
@@ -2012,6 +2133,74 @@ export default function App() {
                   })}
                 </div>
               )}
+              <div style={styles.commentsBlock}>
+                <button
+                  style={styles.commentsToggle}
+                  onClick={() => setOpenComments(commentsOpen ? null : commentsKey)}
+                  aria-expanded={commentsOpen}
+                >
+                  <MessageSquare size={12} />
+                  {comments.length > 0
+                    ? `Komentarji (${comments.length})`
+                    : "Komentiraj"}
+                  <ChevronRight
+                    size={14}
+                    style={{
+                      transform: commentsOpen ? "rotate(90deg)" : "none",
+                      transition: "transform 150ms ease",
+                    }}
+                  />
+                </button>
+                {commentsOpen && (
+                  <div style={styles.commentsPanel}>
+                    {comments.length === 0 ? (
+                      <div style={styles.commentsEmpty}>Še ni komentarjev.</div>
+                    ) : (
+                      <div style={styles.commentsList}>
+                        {comments.map((c) => (
+                          <div key={c.id} style={styles.commentRow}>
+                            <span
+                              style={styles.avatarChip(personColors[c.author] || GREEN)}
+                            >
+                              {initials(c.author)}
+                            </span>
+                            <div style={styles.commentBody}>
+                              <div style={styles.commentAuthor}>{c.author}</div>
+                              <div style={styles.commentText}>{c.text}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={styles.commentForm}>
+                      <input
+                        style={styles.commentInput}
+                        placeholder="Napiši komentar"
+                        value={commentDraft}
+                        onChange={(e) =>
+                          setCommentDrafts((prev) => ({
+                            ...prev,
+                            [commentsKey]: e.target.value,
+                          }))
+                        }
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && postComment(iso, event.id)
+                        }
+                      />
+                      <button
+                        style={{
+                          ...styles.commentSubmit,
+                          opacity: commentDraft.trim() ? 1 : 0.5,
+                        }}
+                        disabled={!commentDraft.trim()}
+                        onClick={() => postComment(iso, event.id)}
+                      >
+                        Objavi
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}

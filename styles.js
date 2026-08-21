@@ -879,6 +879,98 @@ export const styles = {
     borderRadius: 8,
     cursor: "pointer",
   },
+  commentsBlock: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  // Its own row rather than an icon tucked in the header: it is the one
+  // control on the card that reveals more of the card, and it should look
+  // like it does something rather than like a label.
+  commentsToggle: {
+    alignSelf: "flex-start",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "5px 10px",
+    fontSize: 12,
+    fontWeight: 700,
+    color: "var(--text-secondary)",
+    background: "var(--card-bg)",
+    border: "1px solid var(--border)",
+    borderRadius: 9,
+    cursor: "pointer",
+  },
+  // On the card background, not the event's hue: the thread reads as a panel
+  // laid over the event rather than as more of the event.
+  commentsPanel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    padding: 10,
+    borderRadius: 12,
+    background: "var(--card-bg)",
+    border: "1px solid var(--border)",
+  },
+  // Capped and scrolling, so a long thread cannot push the rest of the day
+  // off screen while the box for writing the next one stays in reach below.
+  commentsList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    maxHeight: 220,
+    overflowY: "auto",
+  },
+  commentsEmpty: {
+    fontSize: 12.5,
+    fontStyle: "italic",
+    color: "var(--text-faint)",
+  },
+  commentRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  commentBody: {
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 1,
+  },
+  commentAuthor: {
+    fontSize: 11.5,
+    fontWeight: 700,
+    color: "var(--text-heading)",
+  },
+  commentText: {
+    fontSize: 13,
+    color: "var(--text)",
+    // Free text: a pasted link or one long word has to wrap rather than push
+    // the panel wider than the card holding it.
+    overflowWrap: "anywhere",
+    whiteSpace: "pre-wrap",
+  },
+  commentForm: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  commentInput: {
+    ...inputSmallStyle,
+    padding: "7px 10px",
+    fontSize: 13,
+  },
+  commentSubmit: {
+    flexShrink: 0,
+    padding: "7px 12px",
+    fontSize: 12.5,
+    fontWeight: 700,
+    color: "#fff",
+    background: GREEN,
+    border: "none",
+    borderRadius: 9,
+    cursor: "pointer",
+  },
   eventAttendees: {
     display: "flex",
     flexWrap: "wrap",

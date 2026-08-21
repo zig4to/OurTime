@@ -334,3 +334,50 @@ test("assignPersonColors: past twelve people it still colors everyone", () => {
   assert.equal(Object.keys(colors).length, 20);
   assert.ok(Object.values(colors).every((c) => /^#[0-9A-F]{6}$/i.test(c)));
 });
+
+test("comment keys round-trip, including events with no id", () => {
+  const key = m.commentKey("2026-08-23", "1787319640431", "1787319999000");
+  assert.equal(key, "avail:2026-08-23:__comment__1787319640431:1787319999000");
+  assert.equal(m.isoFromKey(key), "2026-08-23");
+  assert.deepEqual(m.parseCommentPerson(m.personFromKey(key)), {
+    eventId: "1787319640431",
+    commentId: "1787319999000",
+  });
+
+  // Events created before per-day ids existed have an empty id. Splitting the
+  // person part on the *first* colon would read that as no event id at all
+  // and drop the comment; splitting on the last one keeps it.
+  const legacy = m.commentKey("2026-08-23", "", "1787319999000");
+  assert.deepEqual(m.parseCommentPerson(m.personFromKey(legacy)), {
+    eventId: "",
+    commentId: "1787319999000",
+  });
+
+  // An entry key for a person, not a comment.
+  assert.equal(m.parseCommentPerson("Žiga Tomše"), null);
+  // Marker present but nothing after the colon.
+  assert.equal(m.parseCommentPerson("__comment__123:"), null);
+});
+
+test("encodeComment / decodeComment survive a round trip and bad input", () => {
+  const raw = m.encodeComment({ author: "Tina Brdnik", text: "Se vidimo ob 7 :)" });
+  assert.deepEqual(m.decodeComment(raw, "42"), {
+    id: "42",
+    author: "Tina Brdnik",
+    text: "Se vidimo ob 7 :)",
+  });
+
+  assert.equal(m.decodeComment("not json", "1"), null);
+  // A row that parses but carries no text is not a comment.
+  assert.equal(m.decodeComment('{"author":"X"}', "1"), null);
+});
+
+test("sortComments: oldest first, and the input is left alone", () => {
+  const list = [
+    { id: "300", author: "C", text: "tretji" },
+    { id: "100", author: "A", text: "prvi" },
+    { id: "200", author: "B", text: "drugi" },
+  ];
+  assert.deepEqual(m.sortComments(list).map((c) => c.text), ["prvi", "drugi", "tretji"]);
+  assert.equal(list[0].text, "tretji");
+});
