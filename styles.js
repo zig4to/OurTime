@@ -172,7 +172,11 @@ export const styles = {
   },
   editNameActions: {
     display: "flex",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  editNameActionsLeft: {
+    display: "flex",
     gap: 8,
   },
   inputSmall: {
@@ -210,6 +214,16 @@ export const styles = {
     color: "var(--text-secondary)",
     background: "transparent",
     border: "1.5px solid var(--border-input)",
+    borderRadius: 10,
+    cursor: "pointer",
+  },
+  smallButtonDanger: {
+    padding: "9px 14px",
+    fontSize: 13.5,
+    fontWeight: 700,
+    color: "#fff",
+    background: RED,
+    border: "none",
     borderRadius: 10,
     cursor: "pointer",
   },

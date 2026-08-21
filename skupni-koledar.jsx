@@ -545,12 +545,36 @@ export default function App() {
     if (previous && previous !== full) await migrateEntries(previous, full);
   }
 
-  function startEditingName() {
+  function toggleEditingName() {
+    if (editingName) {
+      // Second click on the same icon closes the form, same as "Prekliči".
+      setDuplicateName(null);
+      setEditingName(false);
+      return;
+    }
     const parts = splitName(name);
     setFirstDraft(parts.first);
     setLastDraft(parts.last);
     setDuplicateName(null);
     setEditingName(true);
+  }
+
+  // "my-name" lives in local (per-device) storage, not the shared table, so
+  // logging out only forgets identity on this browser -- the person's
+  // existing entries and events stay in the shared calendar under their name
+  // for when they (or someone else) log back in as them.
+  async function logout() {
+    setName(null);
+    setEditingName(false);
+    setDuplicateName(null);
+    setNeedsSurname(false);
+    setFirstDraft("");
+    setLastDraft("");
+    try {
+      await window.storage.delete("my-name", false);
+    } catch (e) {
+      console.error("logout storage error:", e);
+    }
   }
 
   async function submitName(first, last) {
@@ -928,7 +952,7 @@ export default function App() {
   const avatarButton = (
     <button
       style={styles.avatarButton}
-      onClick={startEditingName}
+      onClick={toggleEditingName}
       aria-label="Uredi ime"
     >
       {initials(name)}
@@ -956,21 +980,26 @@ export default function App() {
         />
       </div>
       <div style={styles.editNameActions}>
-        <button
-          style={styles.smallButton}
-          disabled={!firstDraft.trim() || !lastDraft.trim() || checkingName}
-          onClick={() => submitName(firstDraft, lastDraft)}
-        >
-          Shrani
-        </button>
-        <button
-          style={styles.smallButtonGhost}
-          onClick={() => {
-            setDuplicateName(null);
-            setEditingName(false);
-          }}
-        >
-          Prekliči
+        <div style={styles.editNameActionsLeft}>
+          <button
+            style={styles.smallButton}
+            disabled={!firstDraft.trim() || !lastDraft.trim() || checkingName}
+            onClick={() => submitName(firstDraft, lastDraft)}
+          >
+            Shrani
+          </button>
+          <button
+            style={styles.smallButtonGhost}
+            onClick={() => {
+              setDuplicateName(null);
+              setEditingName(false);
+            }}
+          >
+            Prekliči
+          </button>
+        </div>
+        <button style={styles.smallButtonDanger} onClick={logout}>
+          Odjava
         </button>
       </div>
     </div>
