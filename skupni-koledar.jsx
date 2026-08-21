@@ -252,6 +252,14 @@ function decodeEvent(raw) {
   }
 }
 
+// duration is stored as a single "HH:MM–HH:MM" display string; split it back
+// into the two <input type="time"> values when re-opening the edit form.
+function splitDuration(duration) {
+  if (!duration) return { start: "", end: "" };
+  const [start, end] = duration.split("–");
+  return { start: (start || "").trim(), end: (end || "").trim() };
+}
+
 // Short inline summary shown next to a person's name, e.g. "danes prost".
 function quickStatusText(hours, dayLabelText) {
   const anySet = hours.some((h) => h !== null);
@@ -366,7 +374,9 @@ export default function App() {
   const [editingEvent, setEditingEvent] = useState(null); // iso of the day whose event form is open, or null
   const [eventTitleDraft, setEventTitleDraft] = useState("");
   const [eventDescDraft, setEventDescDraft] = useState("");
-  const [eventDurationDraft, setEventDurationDraft] = useState("");
+  const [showEventDescInput, setShowEventDescInput] = useState(false);
+  const [eventStartDraft, setEventStartDraft] = useState("");
+  const [eventEndDraft, setEventEndDraft] = useState("");
 
   const gridRef = useRef(null);
   const dragActionRef = useRef("set");
@@ -684,7 +694,10 @@ export default function App() {
     const existing = dayEvents[iso];
     setEventTitleDraft(existing?.title || "");
     setEventDescDraft(existing?.description || "");
-    setEventDurationDraft(existing?.duration || "");
+    setShowEventDescInput(!!existing?.description);
+    const { start, end } = splitDuration(existing?.duration || "");
+    setEventStartDraft(start);
+    setEventEndDraft(end);
     setEditingEvent(iso);
   }
 
@@ -696,10 +709,14 @@ export default function App() {
     const title = eventTitleDraft.trim();
     if (!title || !name) return;
     const existing = dayEvents[iso];
+    const duration =
+      eventStartDraft && eventEndDraft
+        ? `${eventStartDraft}–${eventEndDraft}`
+        : eventStartDraft || eventEndDraft || "";
     const event = {
       title,
       description: eventDescDraft.trim(),
-      duration: eventDurationDraft.trim(),
+      duration,
       createdBy: existing?.createdBy || name,
       attendees: existing?.attendees || [],
     };
@@ -1063,19 +1080,51 @@ export default function App() {
             value={eventTitleDraft}
             onChange={(e) => setEventTitleDraft(e.target.value)}
           />
-          <textarea
-            style={styles.noteTextarea}
-            rows={2}
-            placeholder="Opis dogodka"
-            value={eventDescDraft}
-            onChange={(e) => setEventDescDraft(e.target.value)}
-          />
-          <input
-            style={styles.input}
-            placeholder="Trajanje dogodka (npr. 18:00–20:00)"
-            value={eventDurationDraft}
-            onChange={(e) => setEventDurationDraft(e.target.value)}
-          />
+          <div style={styles.eventTimeRow}>
+            <input
+              type="time"
+              style={styles.inputSmall}
+              aria-label="Začetek dogodka"
+              value={eventStartDraft}
+              onChange={(e) => setEventStartDraft(e.target.value)}
+            />
+            <span style={styles.eventTimeSep}>–</span>
+            <input
+              type="time"
+              style={styles.inputSmall}
+              aria-label="Konec dogodka"
+              value={eventEndDraft}
+              onChange={(e) => setEventEndDraft(e.target.value)}
+            />
+          </div>
+          {showEventDescInput ? (
+            <div style={styles.noteBlock}>
+              <textarea
+                autoFocus
+                style={styles.noteTextarea}
+                rows={2}
+                placeholder="Opis dogodka"
+                value={eventDescDraft}
+                onChange={(e) => setEventDescDraft(e.target.value)}
+              />
+              <button
+                style={styles.noteRemoveButton}
+                onClick={() => {
+                  setEventDescDraft("");
+                  setShowEventDescInput(false);
+                }}
+              >
+                Odstrani opis
+              </button>
+            </div>
+          ) : (
+            <button
+              style={styles.addNoteButton}
+              onClick={() => setShowEventDescInput(true)}
+            >
+              <MessageSquare size={12} /> Dodaj opis
+            </button>
+          )}
           <div style={styles.editActionsRow}>
             <button style={styles.cancelButton} onClick={cancelEditingEvent}>
               Prekliči
@@ -2333,21 +2382,29 @@ const styles = {
     gap: 6,
   },
   addEventButton: {
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    width: "100%",
-    boxSizing: "border-box",
-    padding: "10px",
+    gap: 5,
+    padding: "7px 11px",
     marginBottom: 14,
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: 700,
     color: GREEN,
     background: GREEN_BG,
     border: `1.5px dashed ${GREEN}`,
-    borderRadius: 10,
+    borderRadius: 9,
     cursor: "pointer",
+  },
+  eventTimeRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
+  eventTimeSep: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "var(--text-secondary)",
   },
   eventCard: {
     background: GREEN_BG,
