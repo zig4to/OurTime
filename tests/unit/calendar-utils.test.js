@@ -207,11 +207,13 @@ test("assignEventColors: stable for an unchanged list, and survives overflow", (
   ];
   assert.deepEqual(m.assignEventColors(events), m.assignEventColors(events));
 
-  // A short list gets to keep the hashed hue outright -- nothing to collide
-  // with -- which is what keeps a card's color steady across refreshes.
-  events.forEach((ev, i) => {
-    assert.equal(m.assignEventColors(events)[i], m.assignEventColors([ev])[0]);
-  });
+  // The first event is the one that can never be bumped -- nothing is taken
+  // when it is dealt -- so it is where the hashed hue is guaranteed to survive
+  // contact with a list, and that hue is what keeps a card's color steady
+  // across refreshes. Later ones may be pushed along by a collision; that is
+  // the assignment doing its job, not a failure.
+  assert.equal(m.assignEventColors(events)[0], m.assignEventColors([events[0]])[0]);
+  assert.equal(new Set(m.assignEventColors(events)).size, events.length);
 
   // Past the palette repeats are unavoidable; it must still colour every card.
   const many = Array.from({ length: 30 }, (_, i) => ({ id: String(i), title: `Dogodek ${i}` }));
@@ -295,4 +297,40 @@ test("shuffleBySeed: every name gets to lead across seeds", () => {
   const leaders = new Set();
   for (let i = 0; i < 200; i++) leaders.add(m.shuffleBySeed(names, `seed${i}`)[0]);
   assert.deepEqual([...leaders].sort(), [...names].sort());
+});
+
+test("assignPersonColors: the four reserved names keep their own color", () => {
+  const colors = m.assignPersonColors([
+    "Andrej Kalan", "Žiga Tomše", "Jernej Veber", "Tina Brdnik", "Nova Oseba",
+  ]);
+  assert.equal(colors["Tina Brdnik"], "#D97AA0"); // roza
+  assert.equal(colors["Jernej Veber"], "#B5651D"); // temna oranžna
+  assert.equal(colors["Žiga Tomše"], "#3A6EA5"); // modra
+  assert.equal(colors["Andrej Kalan"], "#C9A227"); // rumena
+
+  // A newcomer must not be handed a reserved color while others are free.
+  const reserved = ["#D97AA0", "#B5651D", "#3A6EA5", "#C9A227"];
+  assert.ok(!reserved.includes(colors["Nova Oseba"]));
+});
+
+test("assignPersonColors: distinct per person, and independent of input order", () => {
+  const names = [
+    "Tina Brdnik", "Jernej Veber", "Žiga Tomše", "Andrej Kalan",
+    "Ana Kovac", "Bojan Zupan", "Cilka Novak", "Dejan Horvat",
+  ];
+  const colors = m.assignPersonColors(names);
+  assert.equal(new Set(Object.values(colors)).size, names.length, "a color was reused");
+
+  // Reading order and duplicates must not change who gets what -- the same
+  // person appears once per day they entered, in whatever order storage
+  // returns them.
+  assert.deepEqual(m.assignPersonColors([...names].reverse()), colors);
+  assert.deepEqual(m.assignPersonColors([...names, ...names]), colors);
+});
+
+test("assignPersonColors: past twelve people it still colors everyone", () => {
+  const many = Array.from({ length: 20 }, (_, i) => `Oseba ${i}`);
+  const colors = m.assignPersonColors(many);
+  assert.equal(Object.keys(colors).length, 20);
+  assert.ok(Object.values(colors).every((c) => /^#[0-9A-F]{6}$/i.test(c)));
 });

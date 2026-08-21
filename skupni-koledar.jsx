@@ -404,7 +404,16 @@ const RECENT_CARD_HUES = [
 export function hashString(s) {
   let hash = 0;
   for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
-  return hash;
+  // The rolling sum alone is affine in its input: two strings differing only
+  // by a same-length prefix come out shifted by the same amount, so their
+  // relative order survives. shuffleBySeed compares exactly such strings --
+  // one seed, many names -- and without this avalanche step every day of the
+  // week shuffled to the same pair of people.
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x7feb352d) >>> 0;
+  hash ^= hash >>> 15;
+  hash = Math.imul(hash, 0x846ca68b) >>> 0;
+  return (hash ^ (hash >>> 16)) >>> 0;
 }
 
 export function hueIndexForEvent(ev) {
@@ -421,6 +430,71 @@ export function shuffleBySeed(names, seed) {
     .map((n) => ({ n, rank: hashString(`${seed}|${n}`) }))
     .sort((a, b) => a.rank - b.rank || a.n.localeCompare(b.n))
     .map((x) => x.n);
+}
+
+// Identity colors for the initials in a day row -- who someone is, not whether
+// they are free that day. Fixed hexes rather than theme variables on purpose:
+// a person's color should be the same thing in both themes. Kept in the app's
+// muted register so they sit with everything else, and dark enough to carry
+// white initials.
+const PERSON_COLORS = [
+  "#D97AA0", // roza
+  "#B5651D", // temna oranzna
+  "#3A6EA5", // modra
+  "#C9A227", // rumena
+  "#2F6F5E", // zelena
+  "#B23434", // rdeca
+  "#6B4E9E", // vijolicna
+  "#2E8B8B", // turkizna
+  "#7A8C3A", // olivna
+  "#4A5568", // skrilavo siva
+  "#9B4D96", // magenta
+  "#6B4423", // rjava
+];
+
+// These four chose theirs. Everyone after them is dealt one of what is left.
+// Keyed lowercase because that is the only thing about a stored name that is
+// reliably stable.
+const RESERVED_PERSON_COLORS = {
+  "tina brdnik": "#D97AA0", // roza
+  "jernej veber": "#B5651D", // temna oranzna
+  "žiga tomše": "#3A6EA5", // modra
+  "andrej kalan": "#C9A227", // rumena
+};
+
+// Same shape as assignEventColors: the hash picks a preference, and a taken
+// color pushes the pick to the next free one, so no two people in the window
+// share a color while there are still colors left. Sorted and de-duplicated
+// first so the result depends only on *who* is present, never on the order
+// they happened to be read in.
+export function assignPersonColors(names) {
+  const unique = [...new Set(names)].sort((a, b) => a.localeCompare(b));
+  const taken = new Set();
+  const colors = {};
+
+  unique.forEach((n) => {
+    const reserved = RESERVED_PERSON_COLORS[n.trim().toLowerCase()];
+    if (!reserved) return;
+    colors[n] = reserved;
+    taken.add(reserved);
+  });
+
+  unique.forEach((n) => {
+    if (colors[n]) return;
+    const preferred = hashString(n) % PERSON_COLORS.length;
+    let chosen = PERSON_COLORS[preferred];
+    for (let step = 0; step < PERSON_COLORS.length; step++) {
+      const candidate = PERSON_COLORS[(preferred + step) % PERSON_COLORS.length];
+      if (!taken.has(candidate)) {
+        chosen = candidate;
+        break;
+      }
+    }
+    taken.add(chosen);
+    colors[n] = chosen;
+  });
+
+  return colors;
 }
 
 // The hash on its own collides: two unrelated titles can land on the same hue,
@@ -1309,6 +1383,12 @@ export default function App() {
   // Soonest event leftmost, running further into the future to the right.
   const recentEvents = eventsNearestFirst(dayEvents);
 
+  // Assigned across everyone in the whole visible window, not per day, so a
+  // set of initials keeps the same color from row to row.
+  const personColors = assignPersonColors(
+    Object.values(dayData).flatMap((dayEntries) => Object.keys(dayEntries))
+  );
+
   const recentEventsRow = (
     <RecentEventsCarousel events={recentEvents} onSelectDay={openEventDay} />
   );
@@ -2036,14 +2116,16 @@ export default function App() {
             a === name ? -1 : b === name ? 1 : a.localeCompare(b)
           );
           // Whose two initials the row shows is drawn from everyone who
-          // entered, with no place kept for you and no preference by status --
-          // otherwise the same handful of names lead every row, every day.
+          // entered, with no place kept for you -- otherwise the same handful
+          // of names lead every row, every day. The chips carry each person's
+          // own color here; free/busy stays the job of the entry rows inside
+          // the open day, where there is room to read it.
           // The date is folded into the seed so different days pick different
           // people rather than all agreeing on one pair.
           const dayChips = shuffleBySeed(
             Object.keys(entries),
             chipSeedRef.current + iso
-          ).map((n) => [n, tierColor(freeBusyTier(entries[n].hours))]);
+          ).map((n) => [n, personColors[n] || NEUTRAL_BG]);
           const hiddenChips = dayChips.length - DAY_CHIPS_SHOWN;
           const isOpen = openDay === iso;
           const isToday = iso === today;
