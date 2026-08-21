@@ -1558,7 +1558,7 @@ export default function App() {
           const isToday = iso === today;
 
           return (
-            <div key={iso} style={styles.dayCard(isToday)}>
+            <div key={iso} style={styles.dayCard(isToday, isOpen)}>
               <button style={styles.dayHeader} onClick={() => openDayCard(iso)}>
                 <div style={styles.dayDateBlock}>
                   <div style={styles.dayNum}>{dayNumber(d)}</div>
@@ -2095,10 +2095,11 @@ const styles = {
     gap: 10,
     padding: "0 16px",
   },
-  dayCard: (isToday) => ({
+  dayCard: (isToday, isOpen) => ({
     background: "var(--card-bg)",
     borderRadius: 16,
-    border: isToday ? `1.5px solid ${GREEN}` : "1px solid var(--border)",
+    border:
+      isOpen || isToday ? `1.5px solid ${GREEN}` : "1px solid var(--border)",
     boxShadow: isToday ? `0 0 0 3px ${GREEN_BG}` : "none",
     overflow: "hidden",
   }),
@@ -2386,7 +2387,7 @@ const styles = {
     alignItems: "center",
     gap: 5,
     padding: "7px 11px",
-    marginTop: -6,
+    marginTop: -12,
     marginBottom: 6,
     fontSize: 12.5,
     fontWeight: 700,
