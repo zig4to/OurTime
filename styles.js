@@ -11,6 +11,10 @@ export const RED_BG = "var(--red-bg)";
 export const PINK = "var(--pink)";
 export const NEUTRAL_BG = "var(--divider)";
 export const NEUTRAL_TEXT = "var(--neutral-text)";
+// Deliberately not a theme variable: the seam rule is meant to read as a lit
+// neon filament in both themes, and a color that shifts with the theme would
+// lose that in whichever one it got muted for.
+export const NEON_GREEN = "#2BFF88";
 
 export const styles = {
   page: {
@@ -283,19 +287,22 @@ export const styles = {
     padding: "0 5px",
     position: "relative", // anchors recentEventsSeam to this card's gutter
   }),
-  // Marks where the loop comes back around, in the 10px gutter between the
-  // last card and the first. Centred on the boundary (2px wide, pulled 1px
-  // past the slot's edge), inset from the card's full height and rounded, so
-  // it reads as a drawn rule rather than a table border.
+  // Marks where the loop comes back around: a 1px neon filament in the 10px
+  // gutter between the last card and the first, sitting on the boundary and
+  // inset from the card's full height so it reads as drawn rather than as a
+  // table border.
   recentEventsSeam: {
     position: "absolute",
     top: "16%",
     bottom: "16%",
-    right: -1,
-    width: 2,
-    borderRadius: 2,
-    background: GREEN,
-    opacity: 0.55,
+    right: 0,
+    width: 1,
+    borderRadius: 1,
+    background: NEON_GREEN,
+    // A 1px line at full strength just looks thin, not lit. The two shadows
+    // are what make it neon: a tight bright halo hugging the filament and a
+    // wider, fainter bloom around it.
+    boxShadow: `0 0 4px rgba(43, 255, 136, 0.95), 0 0 10px rgba(43, 255, 136, 0.5)`,
   },
   recentEventCard: (hue) => ({
     aspectRatio: "1",
