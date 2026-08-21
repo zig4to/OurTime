@@ -184,3 +184,38 @@ test("initials / capitalize / fmtHour / entryCountLabel", () => {
   assert.equal(m.entryCountLabel(3), "3 vnosi");
   assert.equal(m.entryCountLabel(7), "7 vnosov");
 });
+
+test("assignEventColors: no two cards on screen share a color", () => {
+  // Twelve is the palette size, i.e. the worst case that still has to come
+  // out clean. Plain hashing does not: several of these titles collide.
+  const titles = [
+    "SUP na Savi", "Odbojka", "Hribi", "Plezanje", "Pica", "Kino",
+    "Kolesarjenje", "Tek ob Savi", "Rojstni dan", "Koncert", "Savna", "Piknik",
+  ];
+  const events = titles.map((title, i) => ({ id: String(i), title }));
+
+  const colors = m.assignEventColors(events);
+  assert.equal(colors.length, titles.length);
+  assert.equal(new Set(colors).size, titles.length, "a color was reused");
+});
+
+test("assignEventColors: stable for an unchanged list, and survives overflow", () => {
+  const events = [
+    { id: "1", title: "SUP na Savi" },
+    { id: "2", title: "Odbojka" },
+    { id: "3", title: "Hribi" },
+  ];
+  assert.deepEqual(m.assignEventColors(events), m.assignEventColors(events));
+
+  // A short list gets to keep the hashed hue outright -- nothing to collide
+  // with -- which is what keeps a card's color steady across refreshes.
+  events.forEach((ev, i) => {
+    assert.equal(m.assignEventColors(events)[i], m.assignEventColors([ev])[0]);
+  });
+
+  // Past the palette repeats are unavoidable; it must still colour every card.
+  const many = Array.from({ length: 30 }, (_, i) => ({ id: String(i), title: `Dogodek ${i}` }));
+  const overflow = m.assignEventColors(many);
+  assert.equal(overflow.length, 30);
+  assert.ok(overflow.every((c) => typeof c === "string" && c.length > 0));
+});

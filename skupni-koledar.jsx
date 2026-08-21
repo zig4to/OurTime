@@ -313,22 +313,63 @@ export function tierColor(tier) {
 // different alphas (see styles.recentEventCard) -- translucent so they read
 // as pastel over the light theme and moodier over the dark one, without
 // needing separate light/dark palettes.
+// Spread around the hue wheel rather than picked by eye: the card paints
+// these at 16% alpha, where neighbouring hues collapse into the same pale
+// wash, so the gaps between them have to be wide to survive it. Twelve is
+// therefore both the palette and the ceiling on how many cards can be on
+// screen at once without a repeated color.
+//
+// Listed interleaved (warm, cool, warm, cool...) rather than in wheel order
+// on purpose: assignEventColors resolves a collision by stepping to the next
+// entry, and in wheel order that step lands on the neighbouring hue -- which
+// at this alpha is the one shade it is hardest to tell the original from.
+// Interleaved, the same step crosses the wheel instead.
 const RECENT_CARD_HUES = [
-  "59, 130, 246",
-  "168, 85, 247",
-  "236, 72, 153",
-  "249, 115, 22",
-  "20, 184, 166",
-  "234, 179, 8",
+  "239, 68, 68", // rdeca
+  "6, 182, 212", // cijan
+  "249, 115, 22", // oranzna
+  "59, 130, 246", // modra
+  "234, 179, 8", // rumena
+  "99, 102, 241", // indigo
+  "132, 204, 22", // limeta
+  "168, 85, 247", // vijolicna
+  "34, 197, 94", // zelena
+  "217, 70, 239", // fuksija
+  "20, 184, 166", // turkizna
+  "236, 72, 153", // roza
 ];
 
 // Deterministic (not re-randomized every render) so a given event keeps the
 // same color across re-renders/refreshes.
-export function colorForEvent(ev) {
+export function hueIndexForEvent(ev) {
   const s = ev.title || ev.id || "";
   let hash = 0;
   for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
-  return RECENT_CARD_HUES[hash % RECENT_CARD_HUES.length];
+  return hash % RECENT_CARD_HUES.length;
+}
+
+// The hash on its own collides: two unrelated titles can land on the same hue,
+// and across a whole list that is likelier than it sounds -- six events over
+// twelve hues repeat a color about four times in ten. So hand each event its
+// hashed hue when that hue is still free and the next free one when it isn't,
+// which keeps colors stable for an unchanged list while guaranteeing no
+// repeats up to the size of the palette. Past that repeats are unavoidable and
+// it falls back to the plain hash.
+export function assignEventColors(events) {
+  const taken = new Set();
+  return events.map((ev) => {
+    const preferred = hueIndexForEvent(ev);
+    let chosen = preferred;
+    for (let step = 0; step < RECENT_CARD_HUES.length; step++) {
+      const candidate = (preferred + step) % RECENT_CARD_HUES.length;
+      if (!taken.has(candidate)) {
+        chosen = candidate;
+        break;
+      }
+    }
+    taken.add(chosen);
+    return RECENT_CARD_HUES[chosen];
+  });
 }
 
 export function dominantStatus(hours) {
@@ -484,9 +525,13 @@ function RecentEventsCarousel({ events }) {
 
   if (count === 0) return null;
 
+  // Colors are assigned across the real list once, then carried into the
+  // padding, so a padded copy always matches the card it stands in for.
+  const hues = assignEventColors(events);
+  const cards = events.map((ev, i) => ({ ev, hue: hues[i] }));
   const extended = canSlide
-    ? [...events.slice(-CARDS_IN_VIEW), ...events, ...events.slice(0, CARDS_IN_VIEW)]
-    : events;
+    ? [...cards.slice(-CARDS_IN_VIEW), ...cards, ...cards.slice(0, CARDS_IN_VIEW)]
+    : cards;
   const slotPercent = 100 / extended.length;
 
   return (
@@ -501,9 +546,9 @@ function RecentEventsCarousel({ events }) {
         onPointerCancel={handlePointerCancel}
       >
         <div style={styles.recentEventsTrack(extended.length, index, animate, dragPx)}>
-          {extended.map((ev, i) => (
+          {extended.map(({ ev, hue }, i) => (
             <div key={`${ev.id}-${i}`} style={styles.recentEventSlot(slotPercent)}>
-              <div style={styles.recentEventCard(colorForEvent(ev))}>
+              <div style={styles.recentEventCard(hue)}>
                 <div style={styles.recentEventTitle(Boolean(ev.keyword))}>{ev.title}</div>
                 <div style={styles.recentEventDate}>{shortDateLabel(ev._iso)}</div>
                 {ev.duration && (
