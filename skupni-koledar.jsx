@@ -1394,9 +1394,12 @@ export default function App() {
 
   // Assigned across everyone in the whole visible window, not per day, so a
   // set of initials keeps the same color from row to row.
-  const personColors = assignPersonColors(
-    Object.values(dayData).flatMap((dayEntries) => Object.keys(dayEntries))
-  );
+  const personColors = assignPersonColors([
+    ...Object.values(dayData).flatMap((dayEntries) => Object.keys(dayEntries)),
+    // Event attendees too: someone can say "Da" to an event without ever
+    // filing their availability, and they still need a color to be drawn in.
+    ...Object.values(dayEvents).flatMap((evs) => evs.flatMap((ev) => ev.attendees)),
+  ]);
 
   const recentEventsRow = (
     <RecentEventsCarousel
@@ -1750,7 +1753,7 @@ export default function App() {
                     n === name ? (
                       <button
                         key={n}
-                        style={styles.avatarChipButton(GREEN)}
+                        style={styles.avatarChipButton(personColors[n] || GREEN)}
                         onClick={() => toggleAttendance(iso, event.id)}
                         aria-label="Odjavi udeležbo"
                         title="Odjavi udeležbo"
@@ -1758,7 +1761,7 @@ export default function App() {
                         {initials(n)}
                       </button>
                     ) : (
-                      <span key={n} style={styles.avatarChip(GREEN)}>
+                      <span key={n} style={styles.avatarChip(personColors[n] || GREEN)}>
                         {initials(n)}
                       </span>
                     )
