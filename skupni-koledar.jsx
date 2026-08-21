@@ -1056,8 +1056,6 @@ export default function App() {
 
   const appFooterNote = (
     <p style={styles.appFooterNote}>
-      app create for community by Tomš.
-      <br />
       Aplikacija je še v razvoju in testiranju. Hvala za razumevanje
     </p>
   );
