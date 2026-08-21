@@ -401,11 +401,26 @@ const RECENT_CARD_HUES = [
 
 // Deterministic (not re-randomized every render) so a given event keeps the
 // same color across re-renders/refreshes.
-export function hueIndexForEvent(ev) {
-  const s = ev.title || ev.id || "";
+export function hashString(s) {
   let hash = 0;
   for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
-  return hash % RECENT_CARD_HUES.length;
+  return hash;
+}
+
+export function hueIndexForEvent(ev) {
+  return hashString(ev.title || ev.id || "") % RECENT_CARD_HUES.length;
+}
+
+// Shuffle that is random in effect but not in behaviour: each name is ranked
+// by a hash of the seed and the name, then sorted by that rank. The same seed
+// always yields the same order, which is what keeps a row from reshuffling on
+// every render, while a new seed reorders everything. Equal hashes fall back
+// to the name so the result never depends on input order.
+export function shuffleBySeed(names, seed) {
+  return names
+    .map((n) => ({ n, rank: hashString(`${seed}|${n}`) }))
+    .sort((a, b) => a.rank - b.rank || a.n.localeCompare(b.n))
+    .map((x) => x.n);
 }
 
 // The hash on its own collides: two unrelated titles can land on the same hue,
@@ -677,6 +692,12 @@ export default function App() {
   const [dayData, setDayData] = useState({}); // { iso: { name: { hours, note } } }
   const [openDay, setOpenDay] = useState(null);
   const [scrollToDay, setScrollToDay] = useState(null);
+  // Re-rolled once per load, so the two people a collapsed day shows change
+  // from visit to visit rather than the same name always leading. A ref and
+  // not state: these rows re-render constantly -- the event strip alone
+  // advances every 5s -- and reshuffling on each render would make the chips
+  // jitter in place.
+  const chipSeedRef = useRef(Math.random().toString(36).slice(2));
   const [myHours, setMyHours] = useState(blankHours());
   const [myNote, setMyNote] = useState("");
   const [showNoteInput, setShowNoteInput] = useState(false);
@@ -2011,23 +2032,18 @@ export default function App() {
         {days.map((d) => {
           const iso = d;
           const entries = dayData[iso] || {};
-          const myEntry = entries[name];
-          const others = Object.entries(entries).filter(([n]) => n !== name);
           const allEntries = Object.entries(entries).sort(([a], [b]) =>
             a === name ? -1 : b === name ? 1 : a.localeCompare(b)
           );
-          const freeOthers = others.filter(([, e]) => freeBusyTier(e.hours) === "free");
-          const partialOthers = others.filter(([, e]) => freeBusyTier(e.hours) === "partial");
-          const busyOthers = others.filter(([, e]) => freeBusyTier(e.hours) === "busy");
-          // Ordered the way the row should read: you first, then whoever is
-          // free, then partly free, then busy -- so the two that survive the
-          // cut are the two most worth seeing.
-          const dayChips = [
-            ...(myEntry ? [[name, tierColor(freeBusyTier(myEntry.hours))]] : []),
-            ...freeOthers.map(([n]) => [n, GREEN]),
-            ...partialOthers.map(([n]) => [n, ORANGE]),
-            ...busyOthers.map(([n]) => [n, RED]),
-          ];
+          // Whose two initials the row shows is drawn from everyone who
+          // entered, with no place kept for you and no preference by status --
+          // otherwise the same handful of names lead every row, every day.
+          // The date is folded into the seed so different days pick different
+          // people rather than all agreeing on one pair.
+          const dayChips = shuffleBySeed(
+            Object.keys(entries),
+            chipSeedRef.current + iso
+          ).map((n) => [n, tierColor(freeBusyTier(entries[n].hours))]);
           const hiddenChips = dayChips.length - DAY_CHIPS_SHOWN;
           const isOpen = openDay === iso;
           const isToday = iso === today;

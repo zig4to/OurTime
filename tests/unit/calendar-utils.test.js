@@ -265,3 +265,34 @@ test("eventsNearestFirst: total order, so card colors can't shuffle on rerender"
     ["Legacy", "Novi"]
   );
 });
+
+test("shuffleBySeed: same seed is stable, different seeds reorder", () => {
+  const names = ["Tina Brdnik", "Jernej Veber", "Žiga Tomše", "Andrej Kalan"];
+
+  // Stability is the whole reason this is a hash and not Math.random(): the
+  // day rows re-render constantly, and a fresh order each time would make the
+  // chips jitter in place.
+  assert.deepEqual(m.shuffleBySeed(names, "abc"), m.shuffleBySeed(names, "abc"));
+
+  // Same members, just reordered -- and the input is left alone.
+  const copy = [...names];
+  const shuffled = m.shuffleBySeed(copy, "abc");
+  assert.deepEqual([...shuffled].sort(), [...names].sort());
+  assert.deepEqual(copy, names);
+
+  // Input order must not leak into the result, or "who is first in storage"
+  // would still decide who leads.
+  assert.deepEqual(
+    m.shuffleBySeed([...names].reverse(), "abc"),
+    m.shuffleBySeed(names, "abc")
+  );
+});
+
+test("shuffleBySeed: every name gets to lead across seeds", () => {
+  // The point of the whole change: no single person should be pinned to the
+  // front. Over a spread of seeds each of the four should lead sometimes.
+  const names = ["Tina Brdnik", "Jernej Veber", "Žiga Tomše", "Andrej Kalan"];
+  const leaders = new Set();
+  for (let i = 0; i < 200; i++) leaders.add(m.shuffleBySeed(names, `seed${i}`)[0]);
+  assert.deepEqual([...leaders].sort(), [...names].sort());
+});
