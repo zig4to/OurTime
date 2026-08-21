@@ -18,7 +18,7 @@
           "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
           "lucide-react": "https://esm.sh/lucide-react@0.454.0?external=react",
           "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2",
-          "styles": "/styles.js"
+          "styles": "./styles.js"
         }
       }
     </script>
@@ -26,6 +26,40 @@
   </head>
   <body style="margin: 0">
     <div id="root"></div>
+    <!-- Registered as a classic script *before* the module below, on purpose.
+         If the module fails to even instantiate -- a bad import-map entry, a
+         CDN that won't resolve -- its own code never runs, so a try/catch
+         inside it would never fire; the browser reports that as a window
+         "error" event instead, which only a handler installed earlier can
+         see. Every such failure otherwise renders the exact same thing: a
+         blank white page, with no console to inspect on a phone. -->
+    <script>
+      window.__mounted = false;
+      window.__showFatal = function (err) {
+        // Once the app is up, a stray async error is the app's problem to
+        // handle; tearing down a working UI to print a stack trace would be
+        // a worse failure than the one being reported.
+        if (window.__mounted) return;
+        var root = document.getElementById("root");
+        if (!root) return;
+        var box = document.createElement("pre");
+        box.style.cssText =
+          "margin:0;padding:20px;min-height:100vh;box-sizing:border-box;" +
+          "font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;" +
+          "white-space:pre-wrap;word-break:break-word;" +
+          "color:#fca5a5;background:#1c1917";
+        box.textContent =
+          "Aplikacija se ni naložila.\n\n" +
+          ((err && (err.stack || err.message)) || String(err));
+        root.replaceChildren(box);
+      };
+      window.addEventListener("error", function (e) {
+        window.__showFatal(e.error || e.message);
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        window.__showFatal(e.reason);
+      });
+    </script>
     <script type="module">
       import { createClient } from "@supabase/supabase-js";
 
@@ -134,20 +168,26 @@
           (shared ? sharedStore : localStore).range(fromKey, toKey),
       };
 
-      const source = await (await fetch("./skupni-koledar.jsx")).text();
-      const { code } = Babel.transform(source, {
-        presets: [["react", { runtime: "automatic" }]],
-        filename: "skupni-koledar.jsx",
-      });
-      const blobUrl = URL.createObjectURL(
-        new Blob([code], { type: "text/javascript" })
-      );
-      const [{ default: App }, { createRoot }, { createElement }] = await Promise.all([
-        import(blobUrl),
-        import("react-dom/client"),
-        import("react"),
-      ]);
-      createRoot(document.getElementById("root")).render(createElement(App));
+      try {
+        const source = await (await fetch("./skupni-koledar.jsx")).text();
+        const { code } = Babel.transform(source, {
+          presets: [["react", { runtime: "automatic" }]],
+          filename: "skupni-koledar.jsx",
+        });
+        const blobUrl = URL.createObjectURL(
+          new Blob([code], { type: "text/javascript" })
+        );
+        const [{ default: App }, { createRoot }, { createElement }] = await Promise.all([
+          import(blobUrl),
+          import("react-dom/client"),
+          import("react"),
+        ]);
+        createRoot(document.getElementById("root")).render(createElement(App));
+        window.__mounted = true;
+      } catch (err) {
+        window.__showFatal(err);
+        throw err;
+      }
     </script>
   </body>
 </html>
