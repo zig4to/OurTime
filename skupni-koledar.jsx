@@ -1610,19 +1610,40 @@ export default function App() {
               {event.description && (
                 <p style={styles.eventDescription}>{event.description}</p>
               )}
-              <button
-                style={styles.attendButton(attending)}
-                onClick={() => toggleAttendance(iso, event.id)}
-              >
-                {attending ? "Prideš ✓" : "Da"}
-              </button>
+              {/* Confirming removes this row rather than switching it to a
+                  "you're going" state: once you're on the list your own chip
+                  below says so, and it is also how you take it back. Two
+                  controls for one fact would just leave them to disagree. */}
+              {!attending && (
+                <div style={styles.attendRow}>
+                  <span style={styles.attendPrompt}>Potrdi udeležbo</span>
+                  <button
+                    style={styles.attendButton}
+                    onClick={() => toggleAttendance(iso, event.id)}
+                  >
+                    Da
+                  </button>
+                </div>
+              )}
               {event.attendees.length > 0 && (
                 <div style={styles.eventAttendees}>
-                  {event.attendees.map((n) => (
-                    <span key={n} style={styles.avatarChip(GREEN)}>
-                      {initials(n)}
-                    </span>
-                  ))}
+                  {event.attendees.map((n) =>
+                    n === name ? (
+                      <button
+                        key={n}
+                        style={styles.avatarChipButton(GREEN)}
+                        onClick={() => toggleAttendance(iso, event.id)}
+                        aria-label="Odjavi udeležbo"
+                        title="Odjavi udeležbo"
+                      >
+                        {initials(n)}
+                      </button>
+                    ) : (
+                      <span key={n} style={styles.avatarChip(GREEN)}>
+                        {initials(n)}
+                      </span>
+                    )
+                  )}
                 </div>
               )}
             </div>

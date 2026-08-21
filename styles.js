@@ -12,6 +12,24 @@ export const PINK = "var(--pink)";
 export const NEUTRAL_BG = "var(--divider)";
 export const NEUTRAL_TEXT = "var(--neutral-text)";
 
+// Shared by the plain chip and its clickable variant so the two cannot drift
+// apart -- they have to stay pixel-identical, since the only thing marking one
+// as interactive is the cursor.
+function avatarChipStyle(color) {
+  return {
+    width: 26,
+    height: 26,
+    borderRadius: "50%",
+    background: color,
+    color: "#fff",
+    fontSize: 10.5,
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+}
+
 export const styles = {
   page: {
     minHeight: "100vh",
@@ -429,17 +447,16 @@ export const styles = {
     color: "var(--text-fainter)",
     fontStyle: "italic",
   },
-  avatarChip: (color) => ({
-    width: 26,
-    height: 26,
-    borderRadius: "50%",
-    background: color,
-    color: "#fff",
-    fontSize: 10.5,
-    fontWeight: 700,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+  avatarChip: avatarChipStyle,
+  // Your own chip on an event is how you withdraw again, so it is a real
+  // button rather than a span. Same pixels as the others: the initials being
+  // yours is what marks it, not a different look.
+  avatarChipButton: (color) => ({
+    ...avatarChipStyle(color),
+    fontFamily: "inherit",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
   }),
   eventBadge: {
     height: 26,
@@ -744,20 +761,33 @@ export const styles = {
     lineHeight: 1.4,
     margin: 0,
   },
-  attendButton: (active) => ({
+  // Prompt and button on one line. Only rendered while you are *not* on the
+  // list, so there is no "already confirmed" state to style -- confirming
+  // replaces the whole row with your chip in the attendee list.
+  attendRow: {
     alignSelf: "flex-start",
     display: "flex",
     alignItems: "center",
+    gap: 10,
+  },
+  attendPrompt: {
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+  },
+  attendButton: {
+    display: "flex",
+    alignItems: "center",
     gap: 6,
-    padding: "8px 16px",
-    fontSize: 13,
+    padding: "6px 14px",
+    fontSize: 12.5,
     fontWeight: 700,
-    color: active ? "#fff" : GREEN,
-    background: active ? GREEN : "var(--card-bg)",
+    color: GREEN,
+    background: "var(--card-bg)",
     border: `1.5px solid ${GREEN}`,
-    borderRadius: 9,
+    borderRadius: 8,
     cursor: "pointer",
-  }),
+  },
   eventAttendees: {
     display: "flex",
     flexWrap: "wrap",
