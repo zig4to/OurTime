@@ -1870,6 +1870,7 @@ const styles = {
     outline: "none",
     marginBottom: 14,
     background: "var(--input-bg)",
+    color: "var(--text)",
   },
   primaryButton: {
     width: "100%",
@@ -1977,6 +1978,8 @@ const styles = {
     borderRadius: 10,
     border: "1.5px solid var(--border-input)",
     outline: "none",
+    background: "var(--input-bg)",
+    color: "var(--text)",
   },
   smallButton: {
     padding: "9px 14px",
