@@ -910,6 +910,78 @@ export default function App() {
     if (name && days.length) loadAllData();
   }, [name, days, loadAllData]);
 
+  // Read inside the change handler rather than closed over, so the window
+  // moving never means tearing the subscription down and building it again.
+  const daysRef = useRef(days);
+  useEffect(() => {
+    daysRef.current = days;
+  }, [days]);
+
+  // Live updates: someone else's save lands here without a reload. The feed
+  // carries the changed row itself, so this applies the same one-row edit to
+  // state that persistEntry/saveEvent already make locally -- no refetch per
+  // change. Your own writes echo back and re-apply the value that is already
+  // on screen, which is why both paths have to end in the same shape.
+  //
+  // An open editor is safe from this: startEditing copies into myHours once,
+  // so the draft is its own state and a dayData update cannot move it.
+  useEffect(() => {
+    // The shim is guarded, not assumed: a browser holding an older cached
+    // index.html would otherwise throw here and take the whole app down.
+    if (!name || !window.storage.subscribe) return;
+    let seenSubscribed = false;
+    const unsubscribe = window.storage.subscribe(
+      {
+        onChange: ({ type, key, value }) => {
+          const iso = isoFromKey(key);
+          const person = personFromKey(key);
+          if (!iso || !person || !daysRef.current.includes(iso)) return;
+
+          if (person.startsWith(EVENT_MARKER)) {
+            const id = person.slice(EVENT_MARKER.length);
+            setDayEvents((prev) => {
+              const list = prev[iso] || [];
+              if (type === "DELETE") {
+                return { ...prev, [iso]: list.filter((e) => e.id !== id) };
+              }
+              const ev = decodeEvent(value, id);
+              if (!ev) return prev;
+              // An update to an event already held and an insert of one never
+              // seen arrive as the same kind of message once a reconnect is in
+              // play, so go by whether the id is present rather than by type.
+              const next = list.some((e) => e.id === id)
+                ? list.map((e) => (e.id === id ? ev : e))
+                : [...list, ev];
+              next.sort((a, b) => Number(a.id) - Number(b.id));
+              return { ...prev, [iso]: next };
+            });
+            return;
+          }
+
+          setDayData((prev) => {
+            const dayEntries = { ...(prev[iso] || {}) };
+            if (type === "DELETE") delete dayEntries[person];
+            else dayEntries[person] = decodeEntry(value);
+            return { ...prev, [iso]: dayEntries };
+          });
+        },
+        onStatus: (status) => {
+          if (status !== "SUBSCRIBED") return;
+          // Changes made while the socket was down are simply not replayed,
+          // so re-read the window on every reconnect. Skipped the first time,
+          // which the initial load above has already covered.
+          if (!seenSubscribed) {
+            seenSubscribed = true;
+            return;
+          }
+          loadAllData();
+        },
+      },
+      true
+    );
+    return unsubscribe;
+  }, [name, loadAllData]);
+
   useEffect(() => {
     if (days.length && !hasAutoOpenedRef.current) {
       hasAutoOpenedRef.current = true;

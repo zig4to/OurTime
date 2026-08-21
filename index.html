@@ -79,6 +79,12 @@
           }
           return { rows };
         },
+        // Nothing to listen to: the only keys routed here are this device's
+        // own name and theme, which nobody else can change. Present anyway
+        // so callers never have to check which store they landed on.
+        subscribe() {
+          return () => {};
+        },
       };
 
       const sharedStore = {
@@ -123,6 +129,37 @@
           if (error) throw error;
           return { rows: data || [] };
         },
+        // Live updates. Postgres streams every change to this table and the
+        // payload carries the row itself, so reacting to someone else's save
+        // costs one small message rather than re-running the window query.
+        //
+        // The visible-window filter is applied by the caller, not here: a
+        // postgres_changes subscription takes a single filter expression,
+        // and the window needs two bounds (>= the first day, < the day after
+        // the last one). The table is small enough that the difference is a
+        // few ignored messages.
+        subscribe({ onChange, onStatus }) {
+          const channel = supabase
+            .channel("kv_store_changes")
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "kv_store" },
+              (payload) => {
+                const isDelete = payload.eventType === "DELETE";
+                // A delete carries the row only under `old`; inserts and
+                // updates carry it under `new`.
+                const row = isDelete ? payload.old : payload.new;
+                if (!row || !row.key) return;
+                onChange({
+                  type: payload.eventType,
+                  key: row.key,
+                  value: isDelete ? null : row.value,
+                });
+              }
+            )
+            .subscribe((status) => onStatus && onStatus(status));
+          return () => supabase.removeChannel(channel);
+        },
       };
 
       window.storage = {
@@ -132,6 +169,8 @@
         list: (prefix, shared) => (shared ? sharedStore : localStore).list(prefix),
         range: (fromKey, toKey, shared) =>
           (shared ? sharedStore : localStore).range(fromKey, toKey),
+        subscribe: (handlers, shared) =>
+          (shared ? sharedStore : localStore).subscribe(handlers),
       };
 
       const source = await (await fetch("./skupni-koledar.jsx")).text();

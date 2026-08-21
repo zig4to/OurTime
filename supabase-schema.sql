@@ -34,3 +34,24 @@ create policy "public update avail" on kv_store
 
 create policy "public delete avail" on kv_store
   for delete using (key like 'avail:%');
+
+-- Live updates -------------------------------------------------------------
+-- Publishing the table over Realtime is what makes its row changes reach
+-- subscribed browsers at all, so a save in one shows up in the others
+-- without a reload. This is a separate switch from the policies above: the
+-- SELECT policy still decides who is allowed to receive a given row.
+--
+-- Wrapped because "add table" errors if the table is already published, and
+-- this file is meant to survive being run a second time.
+do $$
+begin
+  alter publication supabase_realtime add table kv_store;
+exception
+  when duplicate_object then null;
+end $$;
+
+-- Send the whole pre-change row rather than just the primary key on update
+-- and delete. The key alone would technically do here (it *is* the primary
+-- key), but this keeps delete payloads self-describing, and the table is far
+-- too small for the extra write-ahead log volume to matter.
+alter table kv_store replica identity full;
