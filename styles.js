@@ -771,12 +771,17 @@ export const styles = {
     gap: 8,
     flexShrink: 0,
   },
+  // Reads as heading text, not as an accent: green made sense when every
+  // event card was green, but the card now takes the event's own hue and the
+  // green sat oddly on all the others. The token follows the theme, so this is
+  // near-black on light and near-white on dark -- the same ink as the title
+  // right below it.
   eventEyebrow: {
     fontSize: 10.5,
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.06em",
-    color: GREEN,
+    color: "var(--text-heading)",
   },
   eventEyebrowMeta: {
     fontSize: 11.5,
