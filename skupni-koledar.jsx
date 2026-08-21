@@ -2055,12 +2055,16 @@ export default function App() {
                           {initials(n)}
                         </span>
                       ))}
-                      {dayEvents[iso]?.length > 0 && (
-                        <span style={styles.eventBadge}>Dogodek</span>
-                      )}
                     </>
                   )}
                 </div>
+                {/* Outside dayPeople on purpose: in there it trailed whatever
+                    avatars happened to be present and so landed in a different
+                    spot on every row. As a sibling it is pushed to the right
+                    by dayPeople's flex: 1 and lines up down the whole list. */}
+                {dayEvents[iso]?.length > 0 && (
+                  <span style={styles.eventBadge}>Dogodek</span>
+                )}
                 <ChevronRight
                   size={18}
                   color="var(--text-faint)"

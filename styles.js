@@ -460,6 +460,7 @@ export const styles = {
   }),
   eventBadge: {
     height: 26,
+    flexShrink: 0,
     boxSizing: "border-box",
     padding: "0 9px",
     borderRadius: 13,
