@@ -296,7 +296,16 @@ export const styles = {
     borderRadius: 1,
     background: GREEN,
   },
-  recentEventCard: (hue) => ({
+  // Rendered as a <button> (it opens the event's day), so it carries the
+  // usual button resets: without them the card would pick up the UA's font
+  // and centre its text.
+  recentEventCard: (hue, dragging) => ({
+    font: "inherit",
+    color: "inherit",
+    textAlign: "left",
+    // While a drag is in flight the whole strip is being grabbed, so the
+    // cursor should say that rather than advertise a click that won't happen.
+    cursor: dragging ? "grabbing" : "pointer",
     aspectRatio: "1",
     width: "100%",
     minWidth: 0,

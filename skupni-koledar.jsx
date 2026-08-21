@@ -127,6 +127,12 @@ export function weekdayAbbrev(iso) {
   return WEEKDAY_NAMES[utcFromIso(iso).getUTCDay()];
 }
 
+// Scroll target for a day, shared by the mobile accordion card and the
+// desktop detail panel so one lookup works in either layout.
+export function dayAnchorId(iso) {
+  return `day-${iso}`;
+}
+
 export function dayLabel(iso, today) {
   if (iso === today) return "Danes";
   if (iso === addDays(today, 1)) return "Jutri";
@@ -458,7 +464,7 @@ const SWIPE_THRESHOLD_PX = 40;
 // with the transition briefly disabled -- visually a no-op. Real event 0
 // therefore lives at slot CARDS_IN_VIEW, not slot 0, which is why `base` shows
 // up everywhere below instead of a plain 0.
-function RecentEventsCarousel({ events }) {
+function RecentEventsCarousel({ events, onSelectDay }) {
   const count = events.length;
   const canSlide = count > CARDS_IN_VIEW;
   const base = canSlide ? CARDS_IN_VIEW : 0;
@@ -468,6 +474,12 @@ function RecentEventsCarousel({ events }) {
   const [dragPx, setDragPx] = useState(0);
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef(null);
+  // A swipe ends in a click on whichever card the pointer happened to be
+  // over, so cards have to be able to tell a tap from the tail of a drag. The
+  // click lands within a frame or two of the drag ending, so a short window
+  // after it separates the two -- and unlike a sticky flag, a stale timestamp
+  // can't still be swallowing clicks minutes later.
+  const dragEndedAtRef = useRef(0);
   const viewportRef = useRef(null);
 
   // Re-center whenever the list itself changes length, so an index left over
@@ -511,34 +523,48 @@ function RecentEventsCarousel({ events }) {
     dragRef.current = e.clientX;
     setDragging(true);
     setAnimate(false); // follow the finger 1:1 instead of easing behind it
-    e.currentTarget.setPointerCapture(e.pointerId);
   }
 
-  function handlePointerMove(e) {
-    if (dragRef.current === null) return;
-    setDragPx(e.clientX - dragRef.current);
-  }
+  // Tracked on the window, and deliberately without setPointerCapture: capture
+  // retargets the follow-up click to the captured element, so a card's own
+  // onClick would never fire and tapping a card could not open its day. The
+  // window listeners give back the one thing capture was there for -- a drag
+  // that carries on after the pointer wanders off the strip.
+  useEffect(() => {
+    if (!dragging) return;
 
-  function handlePointerUp(e) {
-    if (dragRef.current === null) return;
-    const dx = e.clientX - dragRef.current;
-    dragRef.current = null;
-    setDragPx(0);
-    setAnimate(true);
-    setDragging(false);
-    // One gesture moves one card however far it travelled: the cards are only
-    // a third of a phone screen wide, so a long flick meaning "jump four
-    // ahead" is far less likely than one that just overshot.
-    if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) setIndex((i) => i + (dx < 0 ? 1 : -1));
-  }
+    function move(e) {
+      if (dragRef.current === null) return;
+      setDragPx(e.clientX - dragRef.current);
+    }
 
-  function handlePointerCancel() {
-    if (dragRef.current === null) return;
-    dragRef.current = null;
-    setDragPx(0);
-    setAnimate(true);
-    setDragging(false);
-  }
+    function end(e) {
+      const startX = dragRef.current;
+      dragRef.current = null;
+      setDragPx(0);
+      setAnimate(true);
+      setDragging(false);
+      if (startX === null || e.type === "pointercancel") return;
+
+      const dx = e.clientX - startX;
+      // Well below SWIPE_THRESHOLD_PX: a drag too small to move the strip
+      // should still not read as a tap on the card it ended over.
+      if (Math.abs(dx) > 4) dragEndedAtRef.current = performance.now();
+      // One gesture moves one card however far it travelled: the cards are
+      // only a third of a phone screen wide, so a long flick meaning "jump
+      // four ahead" is far less likely than one that just overshot.
+      if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) setIndex((i) => i + (dx < 0 ? 1 : -1));
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, [dragging]);
 
   if (count === 0) return null;
 
@@ -565,22 +591,26 @@ function RecentEventsCarousel({ events }) {
         ref={viewportRef}
         style={styles.recentEventsViewport(canSlide, dragging)}
         onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
       >
         <div style={styles.recentEventsTrack(extended.length, index, animate, dragPx)}>
           {extended.map(({ ev, hue, seamAfter }, i) => (
             <div key={`${ev.id}-${i}`} style={styles.recentEventSlot(slotPercent)}>
               {seamAfter && <div style={styles.recentEventsSeam} />}
-              <div style={styles.recentEventCard(hue)}>
+              <button
+                type="button"
+                style={styles.recentEventCard(hue, dragging)}
+                onClick={() => {
+                  if (performance.now() - dragEndedAtRef.current < 150) return;
+                  onSelectDay?.(ev._iso);
+                }}
+              >
                 <div style={styles.recentEventTitle(Boolean(ev.keyword))}>{ev.title}</div>
                 <div style={styles.recentEventDate}>{shortDateLabel(ev._iso)}</div>
                 {ev.duration && (
                   <div style={styles.recentEventTime}>{splitDuration(ev.duration).start}</div>
                 )}
                 {ev.keyword && <div style={styles.recentEventKeyword}>{ev.keyword}</div>}
-              </div>
+              </button>
             </div>
           ))}
         </div>
@@ -604,6 +634,7 @@ export default function App() {
   const [days, setDays] = useState([]);
   const [dayData, setDayData] = useState({}); // { iso: { name: { hours, note } } }
   const [openDay, setOpenDay] = useState(null);
+  const [scrollToDay, setScrollToDay] = useState(null);
   const [myHours, setMyHours] = useState(blankHours());
   const [myNote, setMyNote] = useState("");
   const [showNoteInput, setShowNoteInput] = useState(false);
@@ -646,6 +677,19 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!scrollToDay) return;
+    const el = document.getElementById(dayAnchorId(scrollToDay));
+    // On mobile the day is an accordion row further down a long list, so pull
+    // it to the top. On desktop it is a panel already sitting beside the day
+    // grid: "nearest" scrolls only if it happens to be off screen, instead of
+    // yanking a page that was fine where it was.
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: isDesktop ? "nearest" : "start" });
+    }
+    setScrollToDay(null);
+  }, [scrollToDay, isDesktop]);
 
   useEffect(() => {
     (async () => {
@@ -887,6 +931,15 @@ export default function App() {
     setEditingDay(null);
     setEditingPerson(null);
     setSaved(false);
+  }
+
+  // Opening a day from the event strip. The scroll can't happen here: the
+  // day has not expanded yet, so scrollIntoView would aim at where the
+  // collapsed card used to be. Handing the iso to state lets the effect below
+  // run it once React has laid the expanded day out.
+  function openEventDay(iso) {
+    selectDay(iso);
+    setScrollToDay(iso);
   }
 
   function selectDay(iso) {
@@ -1200,7 +1253,9 @@ export default function App() {
   // Soonest event leftmost, running further into the future to the right.
   const recentEvents = eventsNearestFirst(dayEvents);
 
-  const recentEventsRow = <RecentEventsCarousel events={recentEvents} />;
+  const recentEventsRow = (
+    <RecentEventsCarousel events={recentEvents} onSelectDay={openEventDay} />
+  );
 
   const avatarButton = (
     <button
@@ -1624,7 +1679,7 @@ export default function App() {
               })}
             </div>
 
-            <div style={styles.detailPanel}>
+            <div id={dayAnchorId(selectedIso)} style={styles.detailPanel}>
               {selectedIso && (
                 <div style={styles.detailHeaderRow}>
                   <div>
@@ -1912,7 +1967,7 @@ export default function App() {
           const isToday = iso === today;
 
           return (
-            <div key={iso} style={styles.dayCard(isToday, isOpen)}>
+            <div key={iso} id={dayAnchorId(iso)} style={styles.dayCard(isToday, isOpen)}>
               <button style={styles.dayHeader} onClick={() => openDayCard(iso)}>
                 <div style={styles.dayDateBlock}>
                   <div style={styles.dayNum}>{dayNumber(d)}</div>
