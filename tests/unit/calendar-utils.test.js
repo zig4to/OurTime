@@ -48,6 +48,18 @@ test("decodeEvent: invalid JSON returns null", () => {
   assert.equal(m.decodeEvent("not json", "123"), null);
 });
 
+test("decodeEvent: keyword defaults to empty string when absent (older events)", () => {
+  const raw = JSON.stringify({ title: "Brez ključne besede", createdBy: "X", attendees: [] });
+  const ev = m.decodeEvent(raw, "1");
+  assert.equal(ev.keyword, "");
+});
+
+test("decodeEvent: keyword round-trips", () => {
+  const raw = JSON.stringify({ title: "Odbojka", keyword: "šport", createdBy: "X", attendees: [] });
+  const ev = m.decodeEvent(raw, "1");
+  assert.equal(ev.keyword, "šport");
+});
+
 test("eventKey: legacy id (empty string) round-trips through the key format", () => {
   const key = m.eventKey("2026-08-27", "");
   assert.equal(key, "avail:2026-08-27:__event__");
@@ -129,6 +141,11 @@ test("addDays / dayLabel across a DST-adjacent date", () => {
   // at UTC midnight so this must not skip or repeat a day.
   assert.equal(m.addDays("2026-03-28", 1), "2026-03-29");
   assert.equal(m.addDays("2026-03-29", 1), "2026-03-30");
+});
+
+test("shortDateLabel: weekday abbrev + day.month, no leading zeros", () => {
+  assert.equal(m.shortDateLabel("2026-08-22"), "sob. 22.8");
+  assert.equal(m.shortDateLabel("2026-02-01"), "ned. 1.2");
 });
 
 test("dayLabel: Danes/Jutri override weekday names", () => {

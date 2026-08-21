@@ -117,11 +117,28 @@ export function dayNumber(iso) {
   return Number(iso.slice(8, 10));
 }
 
+export function monthNumber(iso) {
+  return Number(iso.slice(5, 7));
+}
+
+const WEEKDAY_NAMES = ["ned", "pon", "tor", "sre", "čet", "pet", "sob"];
+
+export function weekdayAbbrev(iso) {
+  return WEEKDAY_NAMES[utcFromIso(iso).getUTCDay()];
+}
+
 export function dayLabel(iso, today) {
-  const names = ["ned", "pon", "tor", "sre", "čet", "pet", "sob"];
   if (iso === today) return "Danes";
   if (iso === addDays(today, 1)) return "Jutri";
-  return names[utcFromIso(iso).getUTCDay()];
+  return weekdayAbbrev(iso);
+}
+
+// "ned. 12.2" -- short weekday + day.month, no leading zeros. Used on the
+// recent-events cards where the day-list's own "Danes"/"Jutri" framing
+// (dayLabel) would be ambiguous once cards from several different days sit
+// side by side.
+export function shortDateLabel(iso) {
+  return `${weekdayAbbrev(iso)}. ${dayNumber(iso)}.${monthNumber(iso)}`;
 }
 
 export function initials(name) {
@@ -244,6 +261,7 @@ export function decodeEvent(raw, id) {
       id,
       title: parsed.title || "",
       description: parsed.description || "",
+      keyword: parsed.keyword || "",
       duration: parsed.duration || "",
       createdBy: parsed.createdBy || "",
       attendees: Array.isArray(parsed.attendees) ? parsed.attendees : [],
@@ -288,6 +306,29 @@ export function freeBusyTier(hours) {
 
 export function tierColor(tier) {
   return tier === "free" ? GREEN : tier === "busy" ? RED : ORANGE;
+}
+
+// Accent hues for the "recent events" cards, as bare "r, g, b" triplets so
+// the same hue can drive the background tint, border, and shadow at
+// different alphas (see styles.recentEventCard) -- translucent so they read
+// as pastel over the light theme and moodier over the dark one, without
+// needing separate light/dark palettes.
+const RECENT_CARD_HUES = [
+  "59, 130, 246",
+  "168, 85, 247",
+  "236, 72, 153",
+  "249, 115, 22",
+  "20, 184, 166",
+  "234, 179, 8",
+];
+
+// Deterministic (not re-randomized every render) so a given event keeps the
+// same color across re-renders/refreshes.
+export function colorForEvent(ev) {
+  const s = ev.title || ev.id || "";
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  return RECENT_CARD_HUES[hash % RECENT_CARD_HUES.length];
 }
 
 export function dominantStatus(hours) {
@@ -345,6 +386,65 @@ function useIsDesktop(breakpoint = 860) {
   return isDesktop;
 }
 
+// Auto-advancing "Aktualni dogodki" strip: shows 3 cards, and every 5s slides
+// one card-width left to reveal the next event, wrapping back to the start.
+// The wrap is seamless: a copy of the first 3 events is appended after the
+// real list, so the slide *into* that copy looks identical to sliding into
+// the real first 3 -- once that copy is fully in view, the offset snaps back
+// to 0 with the transition briefly disabled, which is visually a no-op.
+function RecentEventsCarousel({ events }) {
+  const [offset, setOffset] = useState(0);
+  const [animate, setAnimate] = useState(true);
+
+  useEffect(() => {
+    if (events.length <= 3) return;
+    const timer = setInterval(() => setOffset((o) => o + 1), 5000);
+    return () => clearInterval(timer);
+  }, [events.length]);
+
+  useEffect(() => {
+    if (offset < events.length) return;
+    const t = setTimeout(() => {
+      setAnimate(false);
+      setOffset(0);
+    }, 520); // just past the 500ms slide transition
+    return () => clearTimeout(t);
+  }, [offset, events.length]);
+
+  useEffect(() => {
+    if (animate) return;
+    const raf = requestAnimationFrame(() => setAnimate(true));
+    return () => cancelAnimationFrame(raf);
+  }, [animate]);
+
+  if (events.length === 0) return null;
+
+  const extended = events.length > 3 ? events.concat(events.slice(0, 3)) : events;
+  const slotPercent = 100 / extended.length;
+
+  return (
+    <>
+      <div style={styles.recentEventsHeading}>Aktualni dogodki</div>
+      <div style={styles.recentEventsViewport}>
+        <div style={styles.recentEventsTrack(extended.length, offset, animate)}>
+          {extended.map((ev, i) => (
+            <div key={`${ev.id}-${i}`} style={styles.recentEventSlot(slotPercent)}>
+              <div style={styles.recentEventCard(colorForEvent(ev))}>
+                <div style={styles.recentEventTitle}>{ev.title}</div>
+                <div style={styles.recentEventDate}>{shortDateLabel(ev._iso)}</div>
+                {ev.duration && (
+                  <div style={styles.recentEventTime}>{splitDuration(ev.duration).start}</div>
+                )}
+                {ev.keyword && <div style={styles.recentEventKeyword}>{ev.keyword}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState(null);
@@ -378,6 +478,7 @@ export default function App() {
   const [eventTitleDraft, setEventTitleDraft] = useState("");
   const [eventDescDraft, setEventDescDraft] = useState("");
   const [showEventDescInput, setShowEventDescInput] = useState(false);
+  const [eventKeywordDraft, setEventKeywordDraft] = useState("");
   const [eventStartDraft, setEventStartDraft] = useState("");
   const [eventEndDraft, setEventEndDraft] = useState("");
 
@@ -733,6 +834,7 @@ export default function App() {
     setEventTitleDraft(existing?.title || "");
     setEventDescDraft(existing?.description || "");
     setShowEventDescInput(!!existing?.description);
+    setEventKeywordDraft(existing?.keyword || "");
     const { start, end } = splitDuration(existing?.duration || "");
     setEventStartDraft(start);
     setEventEndDraft(end);
@@ -744,6 +846,7 @@ export default function App() {
     setEventTitleDraft("");
     setEventDescDraft("");
     setShowEventDescInput(false);
+    setEventKeywordDraft("");
     setEventStartDraft("");
     setEventEndDraft("");
   }
@@ -761,6 +864,7 @@ export default function App() {
       id: eventId,
       title,
       description: eventDescDraft.trim(),
+      keyword: eventKeywordDraft.trim(),
       duration,
       createdBy: existing?.createdBy || name,
       attendees: existing?.attendees || [],
@@ -948,6 +1052,13 @@ export default function App() {
 
   const today = days[0];
   const isAdmin = name?.trim().toLowerCase() === ADMIN_NAME;
+
+  // Most-recently-created event first (leftmost), across all visible days.
+  const recentEvents = Object.entries(dayEvents)
+    .flatMap(([iso, events]) => events.map((ev) => ({ ...ev, _iso: iso })))
+    .sort((a, b) => Number(b.id) - Number(a.id));
+
+  const recentEventsRow = <RecentEventsCarousel events={recentEvents} />;
 
   const avatarButton = (
     <button
@@ -1192,6 +1303,12 @@ export default function App() {
               <MessageSquare size={12} /> Dodaj opis
             </button>
           )}
+          <input
+            style={styles.input}
+            placeholder="Ključna beseda"
+            value={eventKeywordDraft}
+            onChange={(e) => setEventKeywordDraft(e.target.value)}
+          />
           <div style={styles.editActionsRow}>
             <button style={styles.cancelButton} onClick={cancelEditingEvent}>
               Prekliči
@@ -1320,6 +1437,8 @@ export default function App() {
             </div>
             {avatarButton}
           </header>
+
+          {recentEventsRow}
 
           {nameEditRow}
           {nameClashRow}
@@ -1621,6 +1740,8 @@ export default function App() {
         </div>
         {avatarButton}
       </header>
+
+      {recentEventsRow}
 
       {nameEditRow}
       {nameClashRow}
