@@ -1409,14 +1409,14 @@ export default function App() {
       <div style={styles.editNameInputs}>
         <input
           autoFocus
-          style={styles.inputSmall}
+          style={styles.inputName}
           placeholder="Ime"
           value={firstDraft}
           onChange={(e) => setFirstDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submitName(firstDraft, lastDraft)}
         />
         <input
-          style={styles.inputSmall}
+          style={styles.inputName}
           placeholder="Priimek"
           value={lastDraft}
           onChange={(e) => setLastDraft(e.target.value)}

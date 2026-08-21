@@ -30,6 +30,19 @@ function avatarChipStyle(color) {
   };
 }
 
+const inputSmallStyle = {
+  flex: 1,
+  minWidth: 0,
+  boxSizing: "border-box",
+  padding: "9px 12px",
+  fontSize: 14,
+  borderRadius: 10,
+  border: "1.5px solid var(--border-input)",
+  outline: "none",
+  background: "var(--input-bg)",
+  color: "var(--text)",
+};
+
 export const styles = {
   page: {
     minHeight: "100vh",
@@ -171,13 +184,19 @@ export const styles = {
     padding: 2,
     color: "var(--text-secondary)",
   },
+  // An outlined box rather than a bare stack, so the form reads as one thing
+  // that opened rather than as loose controls that appeared. The spacing is
+  // margin, not padding: the outline has to stop short of the page edges and
+  // keep clear of the greeting above and the event strip below.
   editNameRow: {
     display: "flex",
     flexDirection: "column",
     gap: 8,
-    // Roomier below than the 8px it used to have: the form now opens directly
-    // above the event strip's heading, and 8px left the two crowding.
-    padding: "0 20px 18px 20px",
+    margin: "2px 20px 18px 20px",
+    padding: "10px 12px",
+    border: `1.5px solid ${GREEN}`,
+    borderRadius: 14,
+    background: "var(--card-bg)",
   },
   clashRow: {
     display: "flex",
@@ -199,21 +218,22 @@ export const styles = {
     display: "flex",
     gap: 8,
   },
-  inputSmall: {
-    flex: 1,
-    minWidth: 0,
-    boxSizing: "border-box",
-    padding: "9px 12px",
-    fontSize: 14,
-    borderRadius: 10,
-    border: "1.5px solid var(--border-input)",
-    outline: "none",
-    background: "var(--input-bg)",
-    color: "var(--text)",
-  },
-  smallButton: {
-    padding: "9px 14px",
+  inputSmall: inputSmallStyle,
+  // The name fields specifically: a first name and a surname are short, and
+  // stretching them the full width of the form made the box look emptier the
+  // wider the screen got.
+  inputName: {
+    ...inputSmallStyle,
+    flex: "1 1 0",
+    maxWidth: 150,
+    padding: "7px 10px",
     fontSize: 13.5,
+  },
+  // Trimmed to match the name form they all live in -- these three are used
+  // nowhere else, so they can be sized for it.
+  smallButton: {
+    padding: "7px 12px",
+    fontSize: 13,
     fontWeight: 700,
     color: "#fff",
     background: GREEN,
@@ -228,8 +248,8 @@ export const styles = {
     color: RED,
   },
   smallButtonGhost: {
-    padding: "9px 14px",
-    fontSize: 13.5,
+    padding: "7px 12px",
+    fontSize: 13,
     fontWeight: 600,
     color: "var(--text-secondary)",
     background: "transparent",
@@ -238,8 +258,8 @@ export const styles = {
     cursor: "pointer",
   },
   smallButtonDanger: {
-    padding: "9px 14px",
-    fontSize: 13.5,
+    padding: "7px 12px",
+    fontSize: 13,
     fontWeight: 700,
     color: "#fff",
     background: RED,
