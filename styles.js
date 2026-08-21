@@ -421,7 +421,10 @@ export const styles = {
     borderRadius: 16,
     border:
       isOpen || isToday ? `1.5px solid ${GREEN}` : "1px solid var(--border)",
-    boxShadow: isToday ? `0 0 0 3px ${GREEN_BG}` : "none",
+    // No outer ring on today: the green border already says which day it is,
+    // and the halo read as a stray glow around one card in an otherwise flat
+    // list.
+    boxShadow: "none",
     overflow: "hidden",
   }),
   dayHeader: {
@@ -737,16 +740,19 @@ export const styles = {
     fontWeight: 700,
     color: "var(--text-secondary)",
   },
-  eventCard: {
-    background: GREEN_BG,
-    border: `1px solid ${GREEN}`,
+  // Takes the same hue the event's card carries in the strip, so one event is
+  // one color wherever it appears. Falls back to green when there is no hue --
+  // an event still being created has no identity to have been assigned one.
+  eventCard: (hue) => ({
+    background: hue ? `rgba(${hue}, 0.16)` : GREEN_BG,
+    border: hue ? `1px solid rgba(${hue}, 0.42)` : `1px solid ${GREEN}`,
     borderRadius: 14,
     padding: 14,
     marginBottom: 14,
     display: "flex",
     flexDirection: "column",
     gap: 8,
-  },
+  }),
   eventHeaderRow: {
     display: "flex",
     justifyContent: "space-between",

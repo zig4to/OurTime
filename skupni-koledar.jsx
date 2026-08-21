@@ -595,7 +595,7 @@ const SWIPE_THRESHOLD_PX = 40;
 // with the transition briefly disabled -- visually a no-op. Real event 0
 // therefore lives at slot CARDS_IN_VIEW, not slot 0, which is why `base` shows
 // up everywhere below instead of a plain 0.
-function RecentEventsCarousel({ events, onSelectDay }) {
+function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
   const count = events.length;
   const canSlide = count > CARDS_IN_VIEW;
   const base = canSlide ? CARDS_IN_VIEW : 0;
@@ -699,12 +699,13 @@ function RecentEventsCarousel({ events, onSelectDay }) {
 
   if (count === 0) return null;
 
-  // Colors are assigned across the real list once, then carried into the
-  // padding, so a padded copy always matches the card it stands in for.
-  const hues = assignEventColors(events);
+  // Colors come from App rather than being assigned here, because the same
+  // event is also drawn inside its day and the two have to match. Carried
+  // into the padding copies too, so a copy always matches the card it stands
+  // in for.
   const cards = events.map((ev, i) => ({
     ev,
-    hue: hues[i],
+    hue: eventHues[eventKey(ev._iso, ev.id)],
     // The loop's seam: past this card the list starts over at the soonest
     // event again, and without a mark that restart is indistinguishable from
     // simply more events.
@@ -1383,6 +1384,14 @@ export default function App() {
   // Soonest event leftmost, running further into the future to the right.
   const recentEvents = eventsNearestFirst(dayEvents);
 
+  // One color per event, assigned across the whole list and then looked up by
+  // storage key, so an event's card in the strip and its card inside the day
+  // are the same color rather than two independent guesses.
+  const eventHues = {};
+  assignEventColors(recentEvents).forEach((hue, i) => {
+    eventHues[eventKey(recentEvents[i]._iso, recentEvents[i].id)] = hue;
+  });
+
   // Assigned across everyone in the whole visible window, not per day, so a
   // set of initials keeps the same color from row to row.
   const personColors = assignPersonColors(
@@ -1390,7 +1399,11 @@ export default function App() {
   );
 
   const recentEventsRow = (
-    <RecentEventsCarousel events={recentEvents} onSelectDay={openEventDay} />
+    <RecentEventsCarousel
+      events={recentEvents}
+      eventHues={eventHues}
+      onSelectDay={openEventDay}
+    />
   );
 
   const avatarButton = (
@@ -1583,7 +1596,7 @@ export default function App() {
     function eventForm(id) {
       const existing = id != null ? events.find((e) => e.id === id) : null;
       return (
-        <div style={styles.eventCard} key={id || "new"}>
+        <div style={styles.eventCard(eventHues[eventKey(iso, id)])} key={id || "new"}>
           <div style={styles.eventEyebrow}>Dogodek</div>
           <input
             autoFocus
@@ -1680,7 +1693,7 @@ export default function App() {
           const attending = !!name && event.attendees.includes(name);
           const canEdit = event.createdBy === name;
           return (
-            <div style={styles.eventCard} key={event.id}>
+            <div style={styles.eventCard(eventHues[eventKey(iso, event.id)])} key={event.id}>
               <div style={styles.eventHeaderRow}>
                 <div>
                   <div style={styles.eventEyebrow}>
