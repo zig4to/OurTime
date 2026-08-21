@@ -705,10 +705,14 @@ export const styles = {
     alignItems: "flex-start",
     gap: 8,
   },
+  // Side by side rather than stacked: edit on the left, add-another on the
+  // right, so the pair reads as one control group instead of two unrelated
+  // buttons down the card's edge.
   eventHeaderActions: {
     display: "flex",
-    flexDirection: "column",
-    gap: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     flexShrink: 0,
   },
   eventEyebrow: {
