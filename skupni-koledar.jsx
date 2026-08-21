@@ -21,6 +21,7 @@ const GREEN_BG = "var(--green-bg)";
 const ORANGE = "var(--orange)";
 const RED = "var(--red)";
 const RED_BG = "var(--red-bg)";
+const PINK = "var(--pink)";
 const NEUTRAL_BG = "var(--divider)";
 const NEUTRAL_TEXT = "var(--neutral-text)";
 
@@ -49,6 +50,7 @@ const THEME_CSS = `
     --red: #B4482F;
     --red-bg: #F7E9E4;
     --orange: #C6862F;
+    --pink: #B85C7A;
   }
   :root[data-theme="dark"] {
     --bg: #14181A;
@@ -74,6 +76,7 @@ const THEME_CSS = `
     --red: #E0805F;
     --red-bg: #34211C;
     --orange: #E0A855;
+    --pink: #E08FA8;
   }
 `;
 
@@ -1513,7 +1516,7 @@ export default function App() {
                   <div style={styles.dayName}>{dayLabel(d, today)}</div>
                 </div>
                 <div style={styles.dayPeople}>
-                  {allEntries.length === 0 ? (
+                  {allEntries.length === 0 && !dayEvents[iso] ? (
                     <span style={styles.noOne}>
                       {entryCountLabel(allEntries.length)}
                     </span>
@@ -1543,6 +1546,9 @@ export default function App() {
                           {initials(n)}
                         </span>
                       ))}
+                      {dayEvents[iso] && (
+                        <span style={styles.eventBadge}>Dogodek</span>
+                      )}
                     </>
                   )}
                 </div>
@@ -2104,6 +2110,22 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
   }),
+  eventBadge: {
+    height: 26,
+    boxSizing: "border-box",
+    padding: "0 9px",
+    borderRadius: 13,
+    background: PINK,
+    color: "#fff",
+    fontSize: 9.5,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.02em",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    whiteSpace: "nowrap",
+  },
   dayDetail: {
     borderTop: "1px solid var(--divider)",
     padding: "14px",
