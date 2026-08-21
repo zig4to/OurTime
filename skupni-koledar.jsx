@@ -716,6 +716,11 @@ export default function App() {
 
   function cancelEditingEvent() {
     setEditingEvent(null);
+    setEventTitleDraft("");
+    setEventDescDraft("");
+    setShowEventDescInput(false);
+    setEventStartDraft("");
+    setEventEndDraft("");
   }
 
   async function saveEvent(iso, id) {
@@ -1133,7 +1138,6 @@ export default function App() {
           {showEventDescInput ? (
             <div style={styles.noteBlock}>
               <textarea
-                autoFocus
                 style={styles.noteTextarea}
                 rows={2}
                 placeholder="Opis dogodka"
@@ -2480,7 +2484,7 @@ const styles = {
   eventHeaderActions: {
     display: "flex",
     flexDirection: "column",
-    gap: 6,
+    gap: 12,
     flexShrink: 0,
   },
   eventEyebrow: {
