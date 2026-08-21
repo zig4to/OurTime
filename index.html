@@ -18,7 +18,7 @@
           "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
           "lucide-react": "https://esm.sh/lucide-react@0.454.0?external=react",
           "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2",
-          "styles": "/styles.js"
+          "styles": "./styles.js"
         }
       }
     </script>
@@ -134,20 +134,36 @@
           (shared ? sharedStore : localStore).range(fromKey, toKey),
       };
 
-      const source = await (await fetch("./skupni-koledar.jsx")).text();
-      const { code } = Babel.transform(source, {
-        presets: [["react", { runtime: "automatic" }]],
-        filename: "skupni-koledar.jsx",
-      });
-      const blobUrl = URL.createObjectURL(
-        new Blob([code], { type: "text/javascript" })
-      );
-      const [{ default: App }, { createRoot }, { createElement }] = await Promise.all([
-        import(blobUrl),
-        import("react-dom/client"),
-        import("react"),
-      ]);
-      createRoot(document.getElementById("root")).render(createElement(App));
+      // The whole app is bootstrapped here, so any failure (a 404 on one of
+      // the module URLs, a Babel syntax error, an unreachable CDN) would
+      // otherwise leave a silently blank page -- which is impossible to
+      // diagnose on a phone. Show the reason on the page instead.
+      try {
+        const source = await (await fetch("./skupni-koledar.jsx")).text();
+        const { code } = Babel.transform(source, {
+          presets: [["react", { runtime: "automatic" }]],
+          filename: "skupni-koledar.jsx",
+        });
+        const blobUrl = URL.createObjectURL(
+          new Blob([code], { type: "text/javascript" })
+        );
+        const [{ default: App }, { createRoot }, { createElement }] = await Promise.all([
+          import(blobUrl),
+          import("react-dom/client"),
+          import("react"),
+        ]);
+        createRoot(document.getElementById("root")).render(createElement(App));
+      } catch (err) {
+        console.error(err);
+        const pre = document.createElement("pre");
+        pre.style.cssText =
+          "margin:24px;padding:16px;border-radius:12px;background:#fee;color:#900;" +
+          "font:14px/1.5 monospace;white-space:pre-wrap;word-break:break-word";
+        pre.textContent =
+          "Aplikacije ni bilo mogoče naložiti.\n\n" +
+          ((err && (err.stack || err.message)) || String(err));
+        document.getElementById("root").appendChild(pre);
+      }
     </script>
   </body>
 </html>

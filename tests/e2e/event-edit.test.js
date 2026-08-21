@@ -62,10 +62,37 @@ async function runTest(name, fn) {
 }
 
 (async () => {
-  const server = await startServer(APP_ROOT);
+  // Served from a sub-path, like the real GitHub Pages deployment, so a
+  // root-absolute asset URL in index.html fails here too instead of only in
+  // production (see the "app boots when served from a sub-path" test).
+  const server = await startServer(APP_ROOT, "/OurTime");
   const browser = await chromium.launch();
 
   try {
+    await runTest("app boots when served from a sub-path (GitHub Pages)", async () => {
+      // Regression: index.html's import map pointed at "/styles.js", which
+      // resolves to the domain root. On https://zig4to.github.io/OurTime/
+      // that 404s, the module graph fails to load and the page stays blank.
+      const page = await browser.newPage({ viewport: { width: 480, height: 900 } });
+      const failed = [];
+      page.on("requestfailed", (r) => failed.push(r.url()));
+      page.on("response", (r) => {
+        if (r.status() === 404) failed.push(`${r.status()} ${r.url()}`);
+      });
+      await mockKvStore(page, []);
+      await page.goto(`${server.url}/index.html`, { waitUntil: "networkidle" });
+
+      const rootHtml = await page.locator("#root").innerHTML();
+      assert.ok(rootHtml.length > 0, "app rendered nothing (blank page)");
+      assert.equal(
+        await page.locator("#root pre").count(),
+        0,
+        `bootstrap threw: ${rootHtml.slice(0, 500)}`
+      );
+      assert.deepEqual(failed, [], "some assets failed to load");
+      await page.close();
+    });
+
     await runTest("edit prefills fields for a normal, current-format event", async () => {
       const page = await browser.newPage({ viewport: { width: 480, height: 900 } });
       const today = new Date().toISOString().slice(0, 10);
