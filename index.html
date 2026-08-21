@@ -4,6 +4,42 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Garaža Klub Koledar</title>
+
+    <!-- Added to a phone's home screen this runs without browser chrome, so
+         the page has to supply what the browser used to: an icon, a name to
+         sit under it, and a colour for the status bar. -->
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="icon" href="./icon-192.png" type="image/png" />
+    <!-- iOS reads the apple-prefixed pair; everything else reads the other
+         two. The name is spelled short here because a home screen truncates
+         anything longer than about twelve characters. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="masCajt" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#2F6F5E" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#14181A" media="(prefers-color-scheme: dark)" />
+
+    <style>
+      /* The app paints its own background, but only inside its root element.
+         Standalone on iOS there is no browser behind it, so overscrolling
+         past the top or bottom exposed the page itself -- white, whichever
+         theme was chosen. --bg lands as soon as the app sets data-theme; the
+         literals cover the moment before that, matched to the system setting
+         because the saved preference is not readable that early. */
+      html,
+      body {
+        margin: 0;
+        background: var(--bg, #faf9f6);
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: var(--bg, #14181a);
+        }
+      }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -24,7 +60,7 @@
     </script>
     <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
   </head>
-  <body style="margin: 0">
+  <body>
     <div id="root"></div>
     <script type="module">
       import { createClient } from "@supabase/supabase-js";
