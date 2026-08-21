@@ -290,17 +290,32 @@ export const styles = {
     boxShadow: `0 8px 18px -9px rgba(${hue}, 0.28), 0 1px 4px rgba(20, 30, 25, 0.05)`,
     overflow: "hidden",
   }),
-  recentEventTitle: {
+  // The card is a fixed square, so its vertical budget is fixed too. A card
+  // that also shows a keyword has one more row to fit, and a title wrapping
+  // to a second line is what pushes the keyword out; clamp it to one line
+  // and ellipsize. Without a keyword there's room to spare, so a long name
+  // is better wrapped over two lines than cut short.
+  //
+  // The two clamps use different mechanisms on purpose: -webkit-box is the
+  // only way to ellipsize at a line *count*, but at one line it can't
+  // ellipsize a single word longer than the card (it just clips), which
+  // nowrap + text-overflow handles correctly.
+  recentEventTitle: (singleLine) => ({
     fontSize: 14,
     fontWeight: 800,
     color: "var(--text-heading)",
     lineHeight: 1.2,
     marginBottom: 2,
+    minWidth: 0,
     overflow: "hidden",
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical",
-  },
+    ...(singleLine
+      ? { textOverflow: "ellipsis", whiteSpace: "nowrap" }
+      : {
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+        }),
+  }),
   recentEventDate: {
     fontSize: 11,
     fontWeight: 600,

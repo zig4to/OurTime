@@ -430,7 +430,7 @@ function RecentEventsCarousel({ events }) {
           {extended.map((ev, i) => (
             <div key={`${ev.id}-${i}`} style={styles.recentEventSlot(slotPercent)}>
               <div style={styles.recentEventCard(colorForEvent(ev))}>
-                <div style={styles.recentEventTitle}>{ev.title}</div>
+                <div style={styles.recentEventTitle(Boolean(ev.keyword))}>{ev.title}</div>
                 <div style={styles.recentEventDate}>{shortDateLabel(ev._iso)}</div>
                 {ev.duration && (
                   <div style={styles.recentEventTime}>{splitDuration(ev.duration).start}</div>
