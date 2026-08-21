@@ -9,6 +9,7 @@ import {
   Settings,
   Sun,
   Moon,
+  Plus,
 } from "lucide-react";
 
 // Accent colors and every neutral/text/border/background color in the
@@ -224,23 +225,26 @@ function decodeEntry(raw) {
 }
 
 // The Supabase RLS policies (see supabase-schema.sql) only grant access to
-// keys matching "avail:%", so the single group event per day piggybacks on
-// that same prefix using a reserved "person" segment that can never collide
-// with a real "Ime Priimek" identity (real names always contain a space).
+// keys matching "avail:%", so a day's group events piggyback on that same
+// prefix using a reserved "person" segment that can never collide with a
+// real "Ime Priimek" identity (real names always contain a space). A day
+// can have several events, so the marker carries a per-event id suffix
+// (a creation timestamp, which also gives events their display order).
 const EVENT_MARKER = "__event__";
 
-function eventKey(iso) {
-  return `avail:${iso}:${EVENT_MARKER}`;
+function eventKey(iso, id) {
+  return `avail:${iso}:${EVENT_MARKER}${id}`;
 }
 
 function encodeEvent(ev) {
   return JSON.stringify(ev);
 }
 
-function decodeEvent(raw) {
+function decodeEvent(raw, id) {
   try {
     const parsed = JSON.parse(raw);
     return {
+      id,
       title: parsed.title || "",
       description: parsed.description || "",
       duration: parsed.duration || "",
@@ -370,8 +374,8 @@ export default function App() {
   const [viewPerson, setViewPerson] = useState(null); // { name, hours, iso, dateText }
   const [theme, setTheme] = useState("light");
   const [showSettings, setShowSettings] = useState(false);
-  const [dayEvents, setDayEvents] = useState({}); // { iso: { title, description, duration, createdBy, attendees } }
-  const [editingEvent, setEditingEvent] = useState(null); // iso of the day whose event form is open, or null
+  const [dayEvents, setDayEvents] = useState({}); // { iso: [{ id, title, description, duration, createdBy, attendees }] }
+  const [editingEvent, setEditingEvent] = useState(null); // { iso, id } of the open event form, id null means "new event"; or null
   const [eventTitleDraft, setEventTitleDraft] = useState("");
   const [eventDescDraft, setEventDescDraft] = useState("");
   const [showEventDescInput, setShowEventDescInput] = useState(false);
@@ -454,17 +458,24 @@ export default function App() {
       const res = await window.storage.range(fromKey, toKey, true);
       const result = {};
       const events = {};
-      for (const iso of days) result[iso] = {};
+      for (const iso of days) {
+        result[iso] = {};
+        events[iso] = [];
+      }
       for (const row of (res && res.rows) || []) {
         const iso = isoFromKey(row.key);
         const person = personFromKey(row.key);
         if (!person || !(iso in result)) continue;
-        if (person === EVENT_MARKER) {
-          const ev = decodeEvent(row.value);
-          if (ev) events[iso] = ev;
+        if (person.startsWith(EVENT_MARKER)) {
+          const id = person.slice(EVENT_MARKER.length);
+          const ev = decodeEvent(row.value, id);
+          if (ev) events[iso].push(ev);
           continue;
         }
         result[iso][person] = decodeEntry(row.value);
+      }
+      for (const iso of days) {
+        events[iso].sort((a, b) => Number(a.id) - Number(b.id));
       }
       setDayData(result);
       setDayEvents(events);
@@ -690,63 +701,72 @@ export default function App() {
     setSaved(false);
   }
 
-  function startEditingEvent(iso) {
-    const existing = dayEvents[iso];
+  // id === null means "new event" -- the form starts blank instead of
+  // loading an existing one.
+  function startEditingEvent(iso, id = null) {
+    const existing = id ? dayEvents[iso]?.find((e) => e.id === id) : null;
     setEventTitleDraft(existing?.title || "");
     setEventDescDraft(existing?.description || "");
     setShowEventDescInput(!!existing?.description);
     const { start, end } = splitDuration(existing?.duration || "");
     setEventStartDraft(start);
     setEventEndDraft(end);
-    setEditingEvent(iso);
+    setEditingEvent({ iso, id });
   }
 
   function cancelEditingEvent() {
     setEditingEvent(null);
   }
 
-  async function saveEvent(iso) {
+  async function saveEvent(iso, id) {
     const title = eventTitleDraft.trim();
     if (!title || !name) return;
-    const existing = dayEvents[iso];
+    const existing = id ? dayEvents[iso]?.find((e) => e.id === id) : null;
+    const eventId = id || String(Date.now());
     const duration =
       eventStartDraft && eventEndDraft
         ? `${eventStartDraft}–${eventEndDraft}`
         : eventStartDraft || eventEndDraft || "";
     const event = {
+      id: eventId,
       title,
       description: eventDescDraft.trim(),
       duration,
       createdBy: existing?.createdBy || name,
       attendees: existing?.attendees || [],
     };
-    setDayEvents((prev) => ({ ...prev, [iso]: event }));
+    setDayEvents((prev) => {
+      const list = prev[iso] || [];
+      const next = existing
+        ? list.map((e) => (e.id === eventId ? event : e))
+        : [...list, event];
+      return { ...prev, [iso]: next };
+    });
     setEditingEvent(null);
     try {
-      await window.storage.set(eventKey(iso), encodeEvent(event), true);
+      await window.storage.set(eventKey(iso, eventId), encodeEvent(event), true);
     } catch (e) {
       setError("Dogodka ni bilo mogoče shraniti. Poskusi znova.");
       loadAllData();
     }
   }
 
-  async function deleteEvent(iso) {
-    setDayEvents((prev) => {
-      const next = { ...prev };
-      delete next[iso];
-      return next;
-    });
+  async function deleteEvent(iso, id) {
+    setDayEvents((prev) => ({
+      ...prev,
+      [iso]: (prev[iso] || []).filter((e) => e.id !== id),
+    }));
     setEditingEvent(null);
     try {
-      await window.storage.delete(eventKey(iso), true);
+      await window.storage.delete(eventKey(iso, id), true);
     } catch (e) {
       setError("Dogodka ni bilo mogoče izbrisati. Poskusi znova.");
       loadAllData();
     }
   }
 
-  async function toggleAttendance(iso) {
-    const existing = dayEvents[iso];
+  async function toggleAttendance(iso, id) {
+    const existing = dayEvents[iso]?.find((e) => e.id === id);
     if (!existing || !name) return;
     const attending = existing.attendees.includes(name);
     const nextEvent = {
@@ -755,9 +775,12 @@ export default function App() {
         ? existing.attendees.filter((n) => n !== name)
         : [...existing.attendees, name],
     };
-    setDayEvents((prev) => ({ ...prev, [iso]: nextEvent }));
+    setDayEvents((prev) => ({
+      ...prev,
+      [iso]: (prev[iso] || []).map((e) => (e.id === id ? nextEvent : e)),
+    }));
     try {
-      await window.storage.set(eventKey(iso), encodeEvent(nextEvent), true);
+      await window.storage.set(eventKey(iso, id), encodeEvent(nextEvent), true);
     } catch (e) {
       setError("Ni bilo mogoče shraniti udeležbe. Poskusi znova.");
       loadAllData();
@@ -1064,14 +1087,18 @@ export default function App() {
     </div>
   );
 
-  // Shared between the mobile and desktop day-detail views: the one group
-  // event a day can have, or the form to create/edit it. Only the creator
-  // can edit or delete; anyone can toggle their own attendance.
+  // Shared between the mobile and desktop day-detail views: the day's group
+  // events (a day can have several, oldest first) plus whichever one is
+  // being created or edited. Only an event's creator can edit or delete it;
+  // anyone can add another event or toggle their own attendance.
   function renderEventSection(iso) {
-    if (editingEvent === iso) {
-      const existing = dayEvents[iso];
+    const events = dayEvents[iso] || [];
+    const isEditingHere = editingEvent && editingEvent.iso === iso;
+
+    function eventForm(id) {
+      const existing = id ? events.find((e) => e.id === id) : null;
       return (
-        <div style={styles.eventCard}>
+        <div style={styles.eventCard} key={id || "new"}>
           <div style={styles.eventEyebrow}>Dogodek</div>
           <input
             autoFocus
@@ -1135,13 +1162,16 @@ export default function App() {
                 opacity: eventTitleDraft.trim() ? 1 : 0.5,
               }}
               disabled={!eventTitleDraft.trim()}
-              onClick={() => saveEvent(iso)}
+              onClick={() => saveEvent(iso, id)}
             >
               Dodaj
             </button>
           </div>
           {existing && existing.createdBy === name && (
-            <button style={styles.deleteButton} onClick={() => deleteEvent(iso)}>
+            <button
+              style={styles.deleteButton}
+              onClick={() => deleteEvent(iso, id)}
+            >
               <Trash2 size={12} /> Izbriši dogodek
             </button>
           )}
@@ -1149,56 +1179,76 @@ export default function App() {
       );
     }
 
-    const event = dayEvents[iso];
-    if (!event) {
-      return (
-        <button style={styles.addEventButton} onClick={() => startEditingEvent(iso)}>
-          + Dodaj dogodek
-        </button>
-      );
-    }
+    const creatingNew = isEditingHere && editingEvent.id === null;
 
-    const attending = !!name && event.attendees.includes(name);
-    const canEdit = event.createdBy === name;
     return (
-      <div style={styles.eventCard}>
-        <div style={styles.eventHeaderRow}>
-          <div>
-            <div style={styles.eventEyebrow}>Dogodek</div>
-            <div style={styles.eventTitle}>{event.title}</div>
-            {event.duration && (
-              <div style={styles.eventDuration}>{event.duration}</div>
-            )}
-          </div>
-          {canEdit && (
-            <button
-              style={styles.editEntryButton}
-              onClick={() => startEditingEvent(iso)}
-              aria-label="Uredi dogodek"
-            >
-              <Pencil size={13} />
-            </button>
-          )}
-        </div>
-        {event.description && (
-          <p style={styles.eventDescription}>{event.description}</p>
+      <>
+        {events.map((event) => {
+          if (isEditingHere && editingEvent.id === event.id) {
+            return eventForm(event.id);
+          }
+          const attending = !!name && event.attendees.includes(name);
+          const canEdit = event.createdBy === name;
+          return (
+            <div style={styles.eventCard} key={event.id}>
+              <div style={styles.eventHeaderRow}>
+                <div>
+                  <div style={styles.eventEyebrow}>Dogodek</div>
+                  <div style={styles.eventTitle}>{event.title}</div>
+                  {event.duration && (
+                    <div style={styles.eventDuration}>{event.duration}</div>
+                  )}
+                </div>
+                <div style={styles.eventHeaderActions}>
+                  {canEdit && (
+                    <button
+                      style={styles.editEntryButton}
+                      onClick={() => startEditingEvent(iso, event.id)}
+                      aria-label="Uredi dogodek"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
+                  <button
+                    style={styles.editEntryButton}
+                    onClick={() => startEditingEvent(iso, null)}
+                    aria-label="Dodaj nov dogodek"
+                  >
+                    <Plus size={13} />
+                  </button>
+                </div>
+              </div>
+              {event.description && (
+                <p style={styles.eventDescription}>{event.description}</p>
+              )}
+              <button
+                style={styles.attendButton(attending)}
+                onClick={() => toggleAttendance(iso, event.id)}
+              >
+                {attending ? "Prideš ✓" : "Da"}
+              </button>
+              {event.attendees.length > 0 && (
+                <div style={styles.eventAttendees}>
+                  {event.attendees.map((n) => (
+                    <span key={n} style={styles.avatarChip(GREEN)}>
+                      {initials(n)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {creatingNew && eventForm(null)}
+        {events.length === 0 && !creatingNew && (
+          <button
+            style={styles.addEventButton}
+            onClick={() => startEditingEvent(iso, null)}
+          >
+            + Dodaj dogodek
+          </button>
         )}
-        <button
-          style={styles.attendButton(attending)}
-          onClick={() => toggleAttendance(iso)}
-        >
-          {attending ? "Prideš ✓" : "Da"}
-        </button>
-        {event.attendees.length > 0 && (
-          <div style={styles.eventAttendees}>
-            {event.attendees.map((n) => (
-              <span key={n} style={styles.avatarChip(GREEN)}>
-                {initials(n)}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+      </>
     );
   }
 
@@ -1560,7 +1610,7 @@ export default function App() {
                   <div style={styles.dayName}>{dayLabel(d, today)}</div>
                 </div>
                 <div style={styles.dayPeople}>
-                  {allEntries.length === 0 && !dayEvents[iso] ? (
+                  {allEntries.length === 0 && !(dayEvents[iso]?.length > 0) ? (
                     <span style={styles.noOne}>
                       {entryCountLabel(allEntries.length)}
                     </span>
@@ -1590,7 +1640,7 @@ export default function App() {
                           {initials(n)}
                         </span>
                       ))}
-                      {dayEvents[iso] && (
+                      {dayEvents[iso]?.length > 0 && (
                         <span style={styles.eventBadge}>Dogodek</span>
                       )}
                     </>
@@ -2413,6 +2463,12 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 8,
+  },
+  eventHeaderActions: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    flexShrink: 0,
   },
   eventEyebrow: {
     fontSize: 10.5,
