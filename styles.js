@@ -448,6 +448,14 @@ export const styles = {
     fontStyle: "italic",
   },
   avatarChip: avatarChipStyle,
+  // The overflow count in a day row. Same circle as a person's chip so the
+  // group still reads as one run, but neutral: it stands for a number, and any
+  // of the status colors would claim those people are free, partly free or
+  // busy when the whole point is that they aren't shown.
+  avatarChipMore: {
+    ...avatarChipStyle(NEUTRAL_BG),
+    color: NEUTRAL_TEXT,
+  },
   // Your own chip on an event is how you withdraw again, so it is a real
   // button rather than a span. Same pixels as the others: the initials being
   // yours is what marks it, not a different look.

@@ -488,6 +488,11 @@ function useIsDesktop(breakpoint = 860) {
 }
 const CARDS_IN_VIEW = 3;
 
+// How many people's initials a collapsed day row shows before collapsing the
+// rest into a count. The row is a summary, not a roster -- the full list is
+// one tap away inside the day.
+const DAY_CHIPS_SHOWN = 2;
+
 // Below this the gesture reads as a tap or a stray wobble, not a swipe, and
 // the strip springs back to where it was.
 const SWIPE_THRESHOLD_PX = 40;
@@ -2014,6 +2019,16 @@ export default function App() {
           const freeOthers = others.filter(([, e]) => freeBusyTier(e.hours) === "free");
           const partialOthers = others.filter(([, e]) => freeBusyTier(e.hours) === "partial");
           const busyOthers = others.filter(([, e]) => freeBusyTier(e.hours) === "busy");
+          // Ordered the way the row should read: you first, then whoever is
+          // free, then partly free, then busy -- so the two that survive the
+          // cut are the two most worth seeing.
+          const dayChips = [
+            ...(myEntry ? [[name, tierColor(freeBusyTier(myEntry.hours))]] : []),
+            ...freeOthers.map(([n]) => [n, GREEN]),
+            ...partialOthers.map(([n]) => [n, ORANGE]),
+            ...busyOthers.map(([n]) => [n, RED]),
+          ];
+          const hiddenChips = dayChips.length - DAY_CHIPS_SHOWN;
           const isOpen = openDay === iso;
           const isToday = iso === today;
 
@@ -2031,30 +2046,19 @@ export default function App() {
                     </span>
                   ) : (
                     <>
-                      {myEntry && (
+                      {dayChips.slice(0, DAY_CHIPS_SHOWN).map(([n, color]) => (
+                        <span key={n} style={styles.avatarChip(color)}>
+                          {initials(n)}
+                        </span>
+                      ))}
+                      {hiddenChips > 0 && (
                         <span
-                          style={styles.avatarChip(
-                            tierColor(freeBusyTier(myEntry.hours))
-                          )}
+                          style={styles.avatarChipMore}
+                          title={`Še ${hiddenChips} vnesenih`}
                         >
-                          {initials(name)}
+                          +{hiddenChips}
                         </span>
                       )}
-                      {freeOthers.slice(0, 5).map(([n]) => (
-                        <span key={n} style={styles.avatarChip(GREEN)}>
-                          {initials(n)}
-                        </span>
-                      ))}
-                      {partialOthers.slice(0, 4).map(([n]) => (
-                        <span key={n} style={styles.avatarChip(ORANGE)}>
-                          {initials(n)}
-                        </span>
-                      ))}
-                      {busyOthers.slice(0, 3).map(([n]) => (
-                        <span key={n} style={styles.avatarChip(RED)}>
-                          {initials(n)}
-                        </span>
-                      ))}
                     </>
                   )}
                 </div>
