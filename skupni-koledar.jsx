@@ -48,7 +48,7 @@ const THEME_CSS = `
     --avatar-border: #CFE4DA;
     --green: #2F6F5E;
     --green-bg: #E4F1EC;
-    --red: #B4482F;
+    --red: #B23434;
     --red-bg: #F7E9E4;
     --orange: #C6862F;
     --pink: #B85C7A;
@@ -74,7 +74,7 @@ const THEME_CSS = `
     --avatar-border: #34443C;
     --green: #4FA88E;
     --green-bg: #1D2E28;
-    --red: #E0805F;
+    --red: #E15A5A;
     --red-bg: #34211C;
     --orange: #E0A855;
     --pink: #E08FA8;
