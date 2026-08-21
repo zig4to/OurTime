@@ -27,7 +27,39 @@ function avatarChipStyle(color) {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    // An element shrinking away under the cursor reads to the browser like
+    // the start of a drag-select, which paints a highlight across the
+    // initials. There is nothing here worth selecting anyway.
+    userSelect: "none",
+    WebkitUserSelect: "none",
   };
+}
+
+// Saying yes to an event, or taking it back, moves exactly one chip on a card
+// that is otherwise unchanged -- easy to miss, and on a shared calendar the
+// whole point is knowing it registered. So the chip pops in and shrinks away
+// instead of blinking in and out.
+//
+// The @keyframes themselves are in THEME_CSS: inline styles cannot declare
+// them. Only the choice of which one runs lives here, so the timings stay
+// with the rest of the visual language rather than in the click handler --
+// which also needs the exit duration, to wait out the animation before the
+// chip is dropped from state.
+export const CHIP_ENTER_MS = 260;
+export const CHIP_EXIT_MS = 170;
+
+export function chipAnimation(state) {
+  if (state === "in") {
+    // Overshoot on the way in: the chip settles slightly past full size
+    // before landing, which reads as an arrival rather than a repaint.
+    return { animation: `chipIn ${CHIP_ENTER_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1)` };
+  }
+  if (state === "out") {
+    // "forwards" holds the last frame, so the chip cannot flash back to full
+    // size in the gap between the animation ending and React unmounting it.
+    return { animation: `chipOut ${CHIP_EXIT_MS}ms ease-in forwards` };
+  }
+  return null;
 }
 
 const inputSmallStyle = {
@@ -492,6 +524,14 @@ export const styles = {
     border: "none",
     padding: 0,
     cursor: "pointer",
+    // Native button painting, and the highlight some browsers flash on tap,
+    // are both square -- wrong shape for a circle, and now visible for as
+    // long as the withdrawal animation runs. The focus ring is not dropped
+    // here but reshaped: see .chipButton in THEME_CSS, which restores a
+    // round one for keyboard users.
+    appearance: "none",
+    WebkitAppearance: "none",
+    WebkitTapHighlightColor: "transparent",
   }),
   eventBadge: {
     height: 26,

@@ -13,6 +13,9 @@ import {
 } from "lucide-react";
 import {
   styles,
+  chipAnimation,
+  CHIP_ENTER_MS,
+  CHIP_EXIT_MS,
   GREEN,
   GREEN_BG,
   ORANGE,
@@ -75,6 +78,46 @@ const THEME_CSS = `
     --red-bg: #34211C;
     --orange: #E0A855;
     --pink: #E08FA8;
+  }
+
+  /* The chip is a circle, but the ring a browser draws around a clicked
+     button follows its box, so it comes out square -- and Opera GX draws it
+     in a cyan that belongs to no palette here. It was always there; it only
+     became visible once withdrawing animated instead of vanishing on the
+     spot. Suppressed on click, then given back as a round ring for anyone
+     navigating by keyboard, who is the one it exists for. */
+  .chipButton:focus {
+    outline: none;
+  }
+  .chipButton:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 2px;
+  }
+
+  /* Attendee chips joining and leaving an event -- see chipAnimation() in
+     styles.js, which picks between these and owns their durations. They live
+     here because @keyframes cannot be expressed as an inline style. */
+  @keyframes chipIn {
+    0%   { transform: scale(0.4); opacity: 0; }
+    100% { transform: scale(1);   opacity: 1; }
+  }
+  @keyframes chipOut {
+    0%   { transform: scale(1);   opacity: 1; }
+    100% { transform: scale(0.4); opacity: 0; }
+  }
+  /* Someone who asked for less motion still needs to see that the click
+     registered, so the chip appears and disappears -- it just stops moving
+     to get there. The exit keeps its duration either way, since the click
+     handler waits that long before dropping the chip from state. */
+  @media (prefers-reduced-motion: reduce) {
+    @keyframes chipIn {
+      0%   { opacity: 0; }
+      100% { opacity: 1; }
+    }
+    @keyframes chipOut {
+      0%   { opacity: 1; }
+      100% { opacity: 0; }
+    }
   }
 `;
 
@@ -291,6 +334,13 @@ const EVENT_MARKER = "__event__";
 
 export function eventKey(iso, id) {
   return `avail:${iso}:${EVENT_MARKER}${id}`;
+}
+
+// Identifies one person's chip on one event, so an in-flight join or leave
+// animation is pinned to that chip alone -- the same person attending two
+// events must be able to animate on one without twitching on the other.
+export function attendeeChipId(iso, id, person) {
+  return `${iso}:${id}:${person}`;
 }
 
 export function encodeEvent(ev) {
@@ -797,6 +847,10 @@ export default function App() {
   const [eventKeywordDraft, setEventKeywordDraft] = useState("");
   const [eventStartDraft, setEventStartDraft] = useState("");
   const [eventEndDraft, setEventEndDraft] = useState("");
+  // Attendee chips currently playing an animation: chip id -> "in" | "out".
+  // Only ever holds the one or two chips mid-flight; entries are cleared as
+  // each animation lands.
+  const [chipAnim, setChipAnim] = useState({});
 
   const gridRef = useRef(null);
   const dragActionRef = useRef("set");
@@ -1306,12 +1360,45 @@ export default function App() {
     const existing = dayEvents[iso]?.find((e) => e.id === id);
     if (!existing || !name) return;
     const attending = existing.attendees.includes(name);
+    const chipId = attendeeChipId(iso, id, name);
+
+    // Withdrawing has to animate before the state changes, not after: drop
+    // the name from attendees first and React unmounts the chip on the same
+    // tick, leaving nothing on screen to shrink. So the exit plays on the
+    // chip that is still mounted, and only then does it leave the list.
+    if (attending) {
+      setChipAnim((prev) => ({ ...prev, [chipId]: "out" }));
+      await new Promise((resolve) => setTimeout(resolve, CHIP_EXIT_MS));
+    }
+
     const nextEvent = {
       ...existing,
       attendees: attending
         ? existing.attendees.filter((n) => n !== name)
         : [...existing.attendees, name],
     };
+    setChipAnim((prev) => {
+      const next = { ...prev };
+      // On the way out the chip is about to unmount, so the flag has done its
+      // job; on the way in it has to stay set for the animation to run.
+      if (attending) delete next[chipId];
+      else next[chipId] = "in";
+      return next;
+    });
+    if (!attending) {
+      // Cleared only once the pop has finished. Removing the flag mid-flight
+      // would strip the animation and snap the chip to full size; removing it
+      // after costs nothing, since the last frame and the resting style match.
+      setTimeout(
+        () =>
+          setChipAnim((prev) => {
+            const next = { ...prev };
+            delete next[chipId];
+            return next;
+          }),
+        CHIP_ENTER_MS
+      );
+    }
     setDayEvents((prev) => ({
       ...prev,
       [iso]: (prev[iso] || []).map((e) => (e.id === id ? nextEvent : e)),
@@ -1824,11 +1911,16 @@ export default function App() {
               )}
               {event.attendees.length > 0 && (
                 <div style={styles.eventAttendees}>
-                  {event.attendees.map((n) =>
-                    n === name ? (
+                  {event.attendees.map((n) => {
+                    const anim = chipAnimation(chipAnim[attendeeChipId(iso, event.id, n)]);
+                    return n === name ? (
                       <button
                         key={n}
-                        style={styles.avatarChipButton(personColors[n] || GREEN)}
+                        className="chipButton"
+                        style={{
+                          ...styles.avatarChipButton(personColors[n] || GREEN),
+                          ...anim,
+                        }}
                         onClick={() => toggleAttendance(iso, event.id)}
                         aria-label="Odjavi udeležbo"
                         title="Odjavi udeležbo"
@@ -1836,11 +1928,14 @@ export default function App() {
                         {initials(n)}
                       </button>
                     ) : (
-                      <span key={n} style={styles.avatarChip(personColors[n] || GREEN)}>
+                      <span
+                        key={n}
+                        style={{ ...styles.avatarChip(personColors[n] || GREEN), ...anim }}
+                      >
                         {initials(n)}
                       </span>
-                    )
-                  )}
+                    );
+                  })}
                 </div>
               )}
             </div>
