@@ -296,10 +296,10 @@ export const styles = {
     color: "var(--text-heading)",
     lineHeight: 1.2,
     marginBottom: 2,
+    minWidth: 0,
     overflow: "hidden",
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   recentEventDate: {
     fontSize: 11,
@@ -659,6 +659,10 @@ export const styles = {
     alignItems: "flex-start",
     gap: 8,
   },
+  eventHeaderMain: {
+    flex: 1,
+    minWidth: 0,
+  },
   eventHeaderActions: {
     display: "flex",
     flexDirection: "column",
@@ -682,6 +686,10 @@ export const styles = {
     fontWeight: 800,
     color: "var(--text-heading)",
     marginTop: 2,
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   eventDuration: {
     fontSize: 12,

@@ -1349,7 +1349,7 @@ export default function App() {
           return (
             <div style={styles.eventCard} key={event.id}>
               <div style={styles.eventHeaderRow}>
-                <div>
+                <div style={styles.eventHeaderMain}>
                   <div style={styles.eventEyebrow}>
                     Dogodek{" "}
                     <span style={styles.eventEyebrowMeta}>
