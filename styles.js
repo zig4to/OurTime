@@ -281,7 +281,22 @@ export const styles = {
     minWidth: 0,
     boxSizing: "border-box",
     padding: "0 5px",
+    position: "relative", // anchors recentEventsSeam to this card's gutter
   }),
+  // Marks where the loop comes back around, in the 10px gutter between the
+  // last card and the first. Centred on the boundary (2px wide, pulled 1px
+  // past the slot's edge), inset from the card's full height and rounded, so
+  // it reads as a drawn rule rather than a table border.
+  recentEventsSeam: {
+    position: "absolute",
+    top: "16%",
+    bottom: "16%",
+    right: -1,
+    width: 2,
+    borderRadius: 2,
+    background: GREEN,
+    opacity: 0.55,
+  },
   recentEventCard: (hue) => ({
     aspectRatio: "1",
     width: "100%",

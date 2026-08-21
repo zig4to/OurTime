@@ -219,3 +219,49 @@ test("assignEventColors: stable for an unchanged list, and survives overflow", (
   assert.equal(overflow.length, 30);
   assert.ok(overflow.every((c) => typeof c === "string" && c.length > 0));
 });
+
+test("eventsNearestFirst: soonest date first, then start time, then id", () => {
+  const dayEvents = {
+    // Deliberately not in key order: Object.entries follows insertion order
+    // for string keys, so the sort has to do the work, not the map.
+    "2026-08-30": [{ id: "5", title: "SUP na Savi", duration: "13:00–16:00" }],
+    "2026-08-23": [
+      { id: "9", title: "Hribi pozno", duration: "18:00–20:00" },
+      { id: "2", title: "Hribi zgodaj", duration: "07:00–15:00" },
+    ],
+    "2026-08-27": [{ id: "7", title: "Odbojka", duration: "20:00–22:00" }],
+  };
+
+  assert.deepEqual(
+    m.eventsNearestFirst(dayEvents).map((ev) => ev.title),
+    ["Hribi zgodaj", "Hribi pozno", "Odbojka", "SUP na Savi"]
+  );
+});
+
+test("eventsNearestFirst: total order, so card colors can't shuffle on rerender", () => {
+  // Same day, same start time: only the id can separate these two, and it has
+  // to, or their positions (and therefore their colors) flip between renders.
+  const dayEvents = {
+    "2026-08-23": [
+      { id: "20", title: "Drugi", duration: "10:00–11:00" },
+      { id: "10", title: "Prvi", duration: "10:00–11:00" },
+    ],
+  };
+  assert.deepEqual(
+    m.eventsNearestFirst(dayEvents).map((ev) => ev.title),
+    ["Prvi", "Drugi"]
+  );
+
+  // A legacy event stored with a blank id sorts as 0 rather than NaN, which
+  // would make the comparator return NaN and leave the order undefined.
+  const withLegacy = {
+    "2026-08-23": [
+      { id: "10", title: "Novi", duration: "10:00–11:00" },
+      { id: "", title: "Legacy", duration: "10:00–11:00" },
+    ],
+  };
+  assert.deepEqual(
+    m.eventsNearestFirst(withLegacy).map((ev) => ev.title),
+    ["Legacy", "Novi"]
+  );
+});

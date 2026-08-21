@@ -281,6 +281,23 @@ export function splitDuration(duration) {
   return { start: (start || "").trim(), end: (end || "").trim() };
 }
 
+// Flattens the per-day event map into one list ordered nearest-date-first.
+// The visible window only ever runs from today forward, so ascending ISO is
+// the same thing as "closest to today first". Within a day the earlier start
+// time wins, and creation order breaks any remaining tie so the order is
+// total -- otherwise two same-day, same-time events could swap places between
+// renders and take their card colors with them.
+export function eventsNearestFirst(dayEvents) {
+  return Object.entries(dayEvents)
+    .flatMap(([iso, events]) => events.map((ev) => ({ ...ev, _iso: iso })))
+    .sort(
+      (a, b) =>
+        a._iso.localeCompare(b._iso) ||
+        splitDuration(a.duration).start.localeCompare(splitDuration(b.duration).start) ||
+        Number(a.id || 0) - Number(b.id || 0)
+    );
+}
+
 // Short inline summary shown next to a person's name, e.g. "danes prost".
 export function quickStatusText(hours, dayLabelText) {
   const anySet = hours.some((h) => h !== null);
@@ -528,7 +545,14 @@ function RecentEventsCarousel({ events }) {
   // Colors are assigned across the real list once, then carried into the
   // padding, so a padded copy always matches the card it stands in for.
   const hues = assignEventColors(events);
-  const cards = events.map((ev, i) => ({ ev, hue: hues[i] }));
+  const cards = events.map((ev, i) => ({
+    ev,
+    hue: hues[i],
+    // The loop's seam: past this card the list starts over at the soonest
+    // event again, and without a mark that restart is indistinguishable from
+    // simply more events.
+    seamAfter: canSlide && i === count - 1,
+  }));
   const extended = canSlide
     ? [...cards.slice(-CARDS_IN_VIEW), ...cards, ...cards.slice(0, CARDS_IN_VIEW)]
     : cards;
@@ -546,8 +570,9 @@ function RecentEventsCarousel({ events }) {
         onPointerCancel={handlePointerCancel}
       >
         <div style={styles.recentEventsTrack(extended.length, index, animate, dragPx)}>
-          {extended.map(({ ev, hue }, i) => (
+          {extended.map(({ ev, hue, seamAfter }, i) => (
             <div key={`${ev.id}-${i}`} style={styles.recentEventSlot(slotPercent)}>
+              {seamAfter && <div style={styles.recentEventsSeam} />}
               <div style={styles.recentEventCard(hue)}>
                 <div style={styles.recentEventTitle(Boolean(ev.keyword))}>{ev.title}</div>
                 <div style={styles.recentEventDate}>{shortDateLabel(ev._iso)}</div>
@@ -1172,10 +1197,8 @@ export default function App() {
   const today = days[0];
   const isAdmin = name?.trim().toLowerCase() === ADMIN_NAME;
 
-  // Most-recently-created event first (leftmost), across all visible days.
-  const recentEvents = Object.entries(dayEvents)
-    .flatMap(([iso, events]) => events.map((ev) => ({ ...ev, _iso: iso })))
-    .sort((a, b) => Number(b.id) - Number(a.id));
+  // Soonest event leftmost, running further into the future to the right.
+  const recentEvents = eventsNearestFirst(dayEvents);
 
   const recentEventsRow = <RecentEventsCarousel events={recentEvents} />;
 
