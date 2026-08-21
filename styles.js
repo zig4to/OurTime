@@ -932,10 +932,29 @@ export const styles = {
     gap: 8,
   },
   commentBody: {
+    // Takes the slack in the row, which is what pushes the delete button to
+    // the far right instead of leaving it against the text.
+    flex: 1,
     minWidth: 0,
     display: "flex",
     flexDirection: "column",
     gap: 1,
+  },
+  // Quiet until you go for it: a red button beside every one of your own
+  // comments would make the thread look like a list of problems.
+  commentDelete: {
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 24,
+    height: 24,
+    padding: 0,
+    color: "var(--text-faint)",
+    background: "transparent",
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer",
   },
   commentAuthor: {
     fontSize: 11.5,

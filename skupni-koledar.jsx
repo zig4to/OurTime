@@ -1558,6 +1558,22 @@ export default function App() {
     }
   }
 
+  // Only what you wrote. Same rule the events already follow, and the one
+  // place a stray tap would destroy something nobody can get back.
+  async function deleteComment(iso, eventId, commentId) {
+    const group = commentGroup(iso, eventId);
+    setDayComments((prev) => ({
+      ...prev,
+      [group]: (prev[group] || []).filter((c) => c.id !== commentId),
+    }));
+    try {
+      await window.storage.delete(commentKey(iso, eventId, commentId), true);
+    } catch (e) {
+      setError("Komentarja ni bilo mogoče izbrisati. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
   async function toggleAttendance(iso, id) {
     const existing = dayEvents[iso]?.find((e) => e.id === id);
     if (!existing || !name) return;
@@ -2168,6 +2184,16 @@ export default function App() {
                               <div style={styles.commentAuthor}>{c.author}</div>
                               <div style={styles.commentText}>{c.text}</div>
                             </div>
+                            {c.author === name && (
+                              <button
+                                style={styles.commentDelete}
+                                onClick={() => deleteComment(iso, event.id, c.id)}
+                                aria-label="Izbriši komentar"
+                                title="Izbriši komentar"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
