@@ -1984,6 +1984,7 @@ export default function App() {
               )}
               {shownAttendees.length > 0 && (
                 <div style={styles.eventAttendees}>
+                  <span style={styles.attendeesLabel}>Pridejo:</span>
                   {shownAttendees.map((n) => {
                     const anim = chipAnimation(chipAnim[attendeeChipId(iso, event.id, n)]);
                     return n === name ? (

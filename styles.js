@@ -75,6 +75,16 @@ const inputSmallStyle = {
   color: "var(--text)",
 };
 
+// The two small labels inside an event card -- "Potrdi udeležbo" beside the
+// confirm button and "Pridejo:" in front of the chips -- sit a few lines apart
+// and have to read as the same kind of text, so they share one definition
+// rather than two copies free to drift.
+const eventCardLabel = {
+  fontSize: 12.5,
+  fontWeight: 600,
+  color: "var(--text-secondary)",
+};
+
 export const styles = {
   page: {
     minHeight: "100vh",
@@ -854,11 +864,8 @@ export const styles = {
     alignItems: "center",
     gap: 10,
   },
-  attendPrompt: {
-    fontSize: 12.5,
-    fontWeight: 600,
-    color: "var(--text-secondary)",
-  },
+  attendPrompt: eventCardLabel,
+  attendeesLabel: eventCardLabel,
   attendButton: {
     display: "flex",
     alignItems: "center",
@@ -875,6 +882,9 @@ export const styles = {
   eventAttendees: {
     display: "flex",
     flexWrap: "wrap",
+    // The label is a flex item alongside the circles, so it has to be centred
+    // against them rather than sitting on their top edge.
+    alignItems: "center",
     gap: 6,
   },
   entryRow: {
