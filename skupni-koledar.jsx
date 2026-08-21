@@ -1459,12 +1459,7 @@ export default function App() {
                             <span
                               style={{
                                 ...styles.entryDot,
-                                background:
-                                  dominantStatus(e.hours) === "free"
-                                    ? GREEN
-                                    : dominantStatus(e.hours) === "busy"
-                                    ? RED
-                                    : NEUTRAL_BG,
+                                background: tierColor(freeBusyTier(e.hours)),
                               }}
                             />
                             <span style={styles.entryTextCol}>
@@ -1791,12 +1786,7 @@ export default function App() {
                                 <span
                                   style={{
                                     ...styles.entryDot,
-                                    background:
-                                      dominantStatus(e.hours) === "free"
-                                        ? GREEN
-                                        : dominantStatus(e.hours) === "busy"
-                                        ? RED
-                                        : NEUTRAL_BG,
+                                    background: tierColor(freeBusyTier(e.hours)),
                                   }}
                                 />
                                 <span style={styles.entryTextCol}>
