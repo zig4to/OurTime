@@ -1193,7 +1193,12 @@ export default function App() {
             <div style={styles.eventCard} key={event.id}>
               <div style={styles.eventHeaderRow}>
                 <div>
-                  <div style={styles.eventEyebrow}>Dogodek</div>
+                  <div style={styles.eventEyebrow}>
+                    Dogodek{" "}
+                    <span style={styles.eventEyebrowMeta}>
+                      - ustvaril {event.createdBy}
+                    </span>
+                  </div>
                   <div style={styles.eventTitle}>{event.title}</div>
                   {event.duration && (
                     <div style={styles.eventDuration}>{event.duration}</div>
@@ -2476,6 +2481,10 @@ const styles = {
     textTransform: "uppercase",
     letterSpacing: "0.06em",
     color: GREEN,
+  },
+  eventEyebrowMeta: {
+    textTransform: "none",
+    letterSpacing: "normal",
   },
   eventTitle: {
     fontSize: 15,
