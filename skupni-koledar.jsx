@@ -586,7 +586,10 @@ const DAY_CHIPS_SHOWN = 2;
 // the strip springs back to where it was.
 const SWIPE_THRESHOLD_PX = 40;
 
-// "Aktualni dogodki" strip: shows 3 cards, advances one card-width every 5s,
+// How long a card sits before the strip slides to the next one.
+const AUTO_ADVANCE_MS = 6000;
+
+// "Aktualni dogodki" strip: shows 3 cards, advances one card-width every 6s,
 // and can also be dragged by mouse or finger. Both directions wrap seamlessly,
 // which is what the padding on `extended` is for: a copy of the last 3 events
 // sits before the real list and a copy of the first 3 after it, so sliding off
@@ -621,10 +624,10 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
   }, [count, base]);
 
   // Auto-advance. Restarting on `dragging` doubles as the pause: letting go
-  // starts a fresh 5s rather than firing whatever was left of the old one.
+  // starts a fresh interval rather than firing whatever was left of the old one.
   useEffect(() => {
     if (!canSlide || dragging) return;
-    const timer = setInterval(() => setIndex((i) => i + 1), 5000);
+    const timer = setInterval(() => setIndex((i) => i + 1), AUTO_ADVANCE_MS);
     return () => clearInterval(timer);
   }, [canSlide, dragging]);
 
@@ -770,7 +773,7 @@ export default function App() {
   // Re-rolled once per load, so the two people a collapsed day shows change
   // from visit to visit rather than the same name always leading. A ref and
   // not state: these rows re-render constantly -- the event strip alone
-  // advances every 5s -- and reshuffling on each render would make the chips
+  // advances every 6s -- and reshuffling on each render would make the chips
   // jitter in place.
   const chipSeedRef = useRef(Math.random().toString(36).slice(2));
   const [myHours, setMyHours] = useState(blankHours());
@@ -1810,7 +1813,7 @@ export default function App() {
 
           {/* Above the event strip, not below it: the form belongs to the
               greeting the pencil sits in, and opening it under a strip that is
-              itself sliding every 5s put it somewhere the eye had just left. */}
+              itself sliding every 6s put it somewhere the eye had just left. */}
           {nameEditRow}
           {nameClashRow}
 
@@ -2116,7 +2119,7 @@ export default function App() {
 
       {/* Above the event strip, not below it: the form belongs to the
           greeting the pencil sits in, and opening it under a strip that is
-          itself sliding every 5s put it somewhere the eye had just left. */}
+          itself sliding every 6s put it somewhere the eye had just left. */}
       {nameEditRow}
       {nameClashRow}
 
