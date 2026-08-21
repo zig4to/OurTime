@@ -296,11 +296,13 @@ export const styles = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
     padding: "0 20px",
-    marginBottom: 10,
+    marginBottom: 14,
   },
   recentEventsViewport: (canSlide, dragging) => ({
     overflow: "hidden",
-    padding: "0 15px 18px 15px",
+    // The top few pixels are also what keeps the cards' shadows from being
+    // clipped by this element's own overflow: hidden.
+    padding: "4px 15px 26px 15px",
     // Claim horizontal gestures for the strip but leave vertical ones to the
     // page, so swiping a card never traps the page scroll on a phone.
     touchAction: canSlide ? "pan-y" : "auto",
