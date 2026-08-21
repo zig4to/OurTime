@@ -343,6 +343,21 @@ export function attendeeChipId(iso, id, person) {
   return `${iso}:${id}:${person}`;
 }
 
+// One event's worth of chips, used to park names that have left the attendee
+// list but are still playing their exit.
+export function eventChipGroup(iso, id) {
+  return `${iso}:${id}`;
+}
+
+// Copy without one key. The animation bookkeeping is all "set a flag, drop it
+// when the animation lands", and doing that inline every time buried what the
+// surrounding code was actually for.
+export function omitKey(obj, key) {
+  const next = { ...obj };
+  delete next[key];
+  return next;
+}
+
 export function encodeEvent(ev) {
   return JSON.stringify(ev);
 }
@@ -851,6 +866,10 @@ export default function App() {
   // Only ever holds the one or two chips mid-flight; entries are cleared as
   // each animation lands.
   const [chipAnim, setChipAnim] = useState({});
+  // Names already gone from an event's attendees but still on screen playing
+  // their exit: "iso:eventId" -> [person]. Same lifetime as the "out" flag
+  // above, and cleared by the same timer.
+  const [ghostChips, setGhostChips] = useState({});
 
   const gridRef = useRef(null);
   const dragActionRef = useRef("set");
@@ -967,12 +986,19 @@ export default function App() {
     if (name && days.length) loadAllData();
   }, [name, days, loadAllData]);
 
-  // Read inside the change handler rather than closed over, so the window
-  // moving never means tearing the subscription down and building it again.
+  // Read inside the change handler rather than closed over, so neither the
+  // window moving nor an event changing means tearing the subscription down
+  // and building it again. dayEvents is needed there to see what an incoming
+  // event changed, which is the only way to tell a new attendee from one who
+  // was already on the list.
   const daysRef = useRef(days);
   useEffect(() => {
     daysRef.current = days;
   }, [days]);
+  const dayEventsRef = useRef(dayEvents);
+  useEffect(() => {
+    dayEventsRef.current = dayEvents;
+  }, [dayEvents]);
 
   // Live updates: someone else's save lands here without a reload. The feed
   // carries the changed row itself, so this applies the same one-row edit to
@@ -996,6 +1022,28 @@ export default function App() {
 
           if (person.startsWith(EVENT_MARKER)) {
             const id = person.slice(EVENT_MARKER.length);
+
+            // Who joined or left, worked out before the state update rather
+            // than inside it: a state updater has to stay a pure function of
+            // its input, and starting animations from one would fire them
+            // twice under React's double-invoked renders.
+            if (type !== "DELETE") {
+              const before = (dayEventsRef.current[iso] || []).find((e) => e.id === id);
+              const incoming = decodeEvent(value, id);
+              // With no prior copy every attendee is "new", which on first
+              // sight of an event would pop the whole list at once. Silence
+              // is the better default: this is a change feed, and an event
+              // nobody here had is not a change anyone watched happen.
+              if (before && incoming) {
+                for (const n of incoming.attendees) {
+                  if (!before.attendees.includes(n)) beginChipEnter(iso, id, n);
+                }
+                for (const n of before.attendees) {
+                  if (!incoming.attendees.includes(n)) beginChipExit(iso, id, n);
+                }
+              }
+            }
+
             setDayEvents((prev) => {
               const list = prev[iso] || [];
               if (type === "DELETE") {
@@ -1356,20 +1404,53 @@ export default function App() {
     }
   }
 
+  // Both halves of the animation are driven from here rather than from the
+  // click handler, because a chip can now also arrive or leave because
+  // someone else acted -- and a join you made and a join you were told about
+  // should look the same. The realtime handler calls these on the difference
+  // between the event it held and the one that arrived.
+
+  function beginChipEnter(iso, eventId, person) {
+    const chipId = attendeeChipId(iso, eventId, person);
+    setChipAnim((prev) => ({ ...prev, [chipId]: "in" }));
+    // Cleared only once the pop has finished. Removing the flag mid-flight
+    // would strip the animation and snap the chip to full size; removing it
+    // after costs nothing, since the last frame and the resting style match.
+    setTimeout(() => setChipAnim((prev) => omitKey(prev, chipId)), CHIP_ENTER_MS);
+  }
+
+  // Dropping a name from attendees unmounts its chip on the same tick,
+  // leaving nothing on screen to shrink. So the name is also parked here for
+  // the length of the exit and rendered alongside the real ones -- state can
+  // then be applied immediately, which matters for a remote change: holding
+  // an incoming payload back to wait out an animation risks applying it after
+  // a newer one.
+  function beginChipExit(iso, eventId, person) {
+    const chipId = attendeeChipId(iso, eventId, person);
+    const groupKey = eventChipGroup(iso, eventId);
+    setChipAnim((prev) => ({ ...prev, [chipId]: "out" }));
+    setGhostChips((prev) => ({
+      ...prev,
+      [groupKey]: [...(prev[groupKey] || []).filter((n) => n !== person), person],
+    }));
+    setTimeout(() => {
+      setGhostChips((prev) => {
+        const rest = (prev[groupKey] || []).filter((n) => n !== person);
+        return rest.length
+          ? { ...prev, [groupKey]: rest }
+          : omitKey(prev, groupKey);
+      });
+      setChipAnim((prev) => omitKey(prev, chipId));
+    }, CHIP_EXIT_MS);
+  }
+
   async function toggleAttendance(iso, id) {
     const existing = dayEvents[iso]?.find((e) => e.id === id);
     if (!existing || !name) return;
     const attending = existing.attendees.includes(name);
-    const chipId = attendeeChipId(iso, id, name);
 
-    // Withdrawing has to animate before the state changes, not after: drop
-    // the name from attendees first and React unmounts the chip on the same
-    // tick, leaving nothing on screen to shrink. So the exit plays on the
-    // chip that is still mounted, and only then does it leave the list.
-    if (attending) {
-      setChipAnim((prev) => ({ ...prev, [chipId]: "out" }));
-      await new Promise((resolve) => setTimeout(resolve, CHIP_EXIT_MS));
-    }
+    if (attending) beginChipExit(iso, id, name);
+    else beginChipEnter(iso, id, name);
 
     const nextEvent = {
       ...existing,
@@ -1377,28 +1458,6 @@ export default function App() {
         ? existing.attendees.filter((n) => n !== name)
         : [...existing.attendees, name],
     };
-    setChipAnim((prev) => {
-      const next = { ...prev };
-      // On the way out the chip is about to unmount, so the flag has done its
-      // job; on the way in it has to stay set for the animation to run.
-      if (attending) delete next[chipId];
-      else next[chipId] = "in";
-      return next;
-    });
-    if (!attending) {
-      // Cleared only once the pop has finished. Removing the flag mid-flight
-      // would strip the animation and snap the chip to full size; removing it
-      // after costs nothing, since the last frame and the resting style match.
-      setTimeout(
-        () =>
-          setChipAnim((prev) => {
-            const next = { ...prev };
-            delete next[chipId];
-            return next;
-          }),
-        CHIP_ENTER_MS
-      );
-    }
     setDayEvents((prev) => ({
       ...prev,
       [iso]: (prev[iso] || []).map((e) => (e.id === id ? nextEvent : e)),
@@ -1558,6 +1617,11 @@ export default function App() {
   // set of initials keeps the same color from row to row.
   const personColors = assignPersonColors([
     ...Object.values(dayData).flatMap((dayEntries) => Object.keys(dayEntries)),
+    // Anyone still playing their exit counts as present for as long as their
+    // chip is on screen. They are already out of the data below, so without
+    // this the chip loses its color and flashes to the fallback green for the
+    // last frames of the animation that is removing it.
+    ...Object.values(ghostChips).flat(),
     // Event attendees too: someone can say "Da" to an event without ever
     // filing their availability, and they still need a color to be drawn in.
     ...Object.values(dayEvents).flatMap((evs) => evs.flatMap((ev) => ev.attendees)),
@@ -1857,6 +1921,15 @@ export default function App() {
           }
           const attending = !!name && event.attendees.includes(name);
           const canEdit = event.createdBy === name;
+          // Anyone mid-exit is drawn after the real attendees, so the chips
+          // that are staying never shift sideways to fill the gap while the
+          // leaver is still shrinking into it. The filter covers someone who
+          // rejoined before their own exit finished -- they are a real
+          // attendee again, and rendering both copies would collide on key.
+          const ghosts = ghostChips[eventChipGroup(iso, event.id)] || [];
+          const shownAttendees = ghosts.length
+            ? [...event.attendees, ...ghosts.filter((n) => !event.attendees.includes(n))]
+            : event.attendees;
           return (
             <div style={styles.eventCard(eventHues[eventKey(iso, event.id)])} key={event.id}>
               <div style={styles.eventHeaderRow}>
@@ -1898,7 +1971,7 @@ export default function App() {
                   "you're going" state: once you're on the list your own chip
                   below says so, and it is also how you take it back. Two
                   controls for one fact would just leave them to disagree. */}
-              {!attending && (
+              {!attending && !ghosts.includes(name) && (
                 <div style={styles.attendRow}>
                   <span style={styles.attendPrompt}>Potrdi udeležbo</span>
                   <button
@@ -1909,9 +1982,9 @@ export default function App() {
                   </button>
                 </div>
               )}
-              {event.attendees.length > 0 && (
+              {shownAttendees.length > 0 && (
                 <div style={styles.eventAttendees}>
-                  {event.attendees.map((n) => {
+                  {shownAttendees.map((n) => {
                     const anim = chipAnimation(chipAnim[attendeeChipId(iso, event.id, n)]);
                     return n === name ? (
                       <button
