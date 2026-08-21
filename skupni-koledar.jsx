@@ -1054,6 +1054,14 @@ export default function App() {
     </button>
   );
 
+  const appFooterNote = (
+    <p style={styles.appFooterNote}>
+      app create for community by Tomš.
+      <br />
+      Aplikacija je še v razvoju in testiranju. Hvala za razumevanje
+    </p>
+  );
+
   const settingsModal = showSettings && (
     <div style={styles.modalOverlay} onClick={() => setShowSettings(false)}>
       <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
@@ -1196,7 +1204,7 @@ export default function App() {
                   <div style={styles.eventEyebrow}>
                     Dogodek{" "}
                     <span style={styles.eventEyebrowMeta}>
-                      - ustvaril {event.createdBy}
+                      - od {event.createdBy}
                     </span>
                   </div>
                   <div style={styles.eventTitle}>{event.title}</div>
@@ -1560,6 +1568,7 @@ export default function App() {
             <span>Koledar si delijo vsi, ki odprejo to povezavo</span>
           </div>
           {settingsButton}
+          {appFooterNote}
         </div>
 
         {viewPersonModal}
@@ -1899,6 +1908,7 @@ export default function App() {
         <span>Koledar si delijo vsi, ki odprejo to povezavo</span>
       </div>
       {settingsButton}
+      {appFooterNote}
 
       {viewPersonModal}
       {settingsModal}
@@ -2483,6 +2493,7 @@ const styles = {
     color: GREEN,
   },
   eventEyebrowMeta: {
+    fontSize: 11.5,
     textTransform: "none",
     letterSpacing: "normal",
   },
@@ -2709,6 +2720,15 @@ const styles = {
     border: "1px solid var(--border)",
     borderRadius: 10,
     cursor: "pointer",
+  },
+  appFooterNote: {
+    margin: "20px auto 0 auto",
+    maxWidth: 320,
+    padding: "0 20px",
+    fontSize: 11,
+    lineHeight: 1.5,
+    color: "var(--text-fainter)",
+    textAlign: "center",
   },
   themeOptionButton: (active) => ({
     flex: 1,
