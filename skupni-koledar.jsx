@@ -4020,6 +4020,8 @@ export default function App() {
             </div>
           )}
 
+          <div style={styles.recentEventsHeading}>Koledar dogodkov</div>
+
           <div style={styles.desktopLayout}>
             <div style={styles.dayGrid}>
               {days.map((d) => {
@@ -4316,6 +4318,8 @@ export default function App() {
           <span style={styles.syncLabel}>sinhroniziram …</span>
         </div>
       )}
+
+      <div style={styles.recentEventsHeading}>Koledar dogodkov</div>
 
       <div style={styles.list}>
         {(showAllDays ? days : days.slice(0, DAYS_SHOWN)).map((d) => {
