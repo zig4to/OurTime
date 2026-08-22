@@ -1025,55 +1025,113 @@ export const styles = {
   // entirely. Sideways, the card keeps its height whatever the count.
   photoRow: {
     display: "flex",
-    gap: 8,
+    alignItems: "flex-start",
+    gap: 10,
     overflowX: "auto",
     paddingBottom: 4,
     WebkitOverflowScrolling: "touch",
   },
-  photoThumb: {
+  // A square cover with its caption under it. One tile per person rather
+  // than one per photo: four people emptying their camera rolls used to
+  // mean thirty thumbnails in a row nobody would scroll to the end of.
+  photoAlbum: {
     flexShrink: 0,
-    width: 72,
-    height: 72,
+    width: 118,
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
     padding: 0,
     border: "none",
-    borderRadius: 10,
+    background: "transparent",
+    textAlign: "left",
+    font: "inherit",
+    color: "inherit",
+    cursor: "pointer",
+  },
+  photoAlbumFrame: {
+    position: "relative",
+    display: "block",
+    width: "100%",
+    aspectRatio: "1",
+    borderRadius: 14,
     overflow: "hidden",
     background: "var(--divider)",
-    cursor: "pointer",
-    appearance: "none",
-    WebkitAppearance: "none",
+    boxShadow: "0 8px 18px -12px rgba(20, 30, 25, 0.55)",
   },
-  // Cover, so a portrait and a landscape shot sit as the same square and the
-  // row stays a straight line.
-  photoThumbImg: {
+  // Cover, so a portrait and a landscape shot sit as the same square and
+  // the row stays a straight line.
+  photoAlbumImg: {
     width: "100%",
     height: "100%",
     objectFit: "cover",
     display: "block",
   },
-  // Holds the space an upload will occupy, so the row does not jump sideways
-  // as each photo lands.
+  // A wash across the top corner so the count stays readable over a photo
+  // that happens to be bright there.
+  photoAlbumScrim: {
+    position: "absolute",
+    inset: 0,
+    background:
+      "linear-gradient(200deg, rgba(20,30,25,0.45) 0%, rgba(20,30,25,0) 45%)",
+    pointerEvents: "none",
+  },
+  photoAlbumCount: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    padding: "2px 8px",
+    borderRadius: 999,
+    fontSize: 11.5,
+    fontWeight: 800,
+    color: "#fff",
+    background: "rgba(20, 30, 25, 0.55)",
+    pointerEvents: "none",
+  },
+  photoAlbumCaption: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    minWidth: 0,
+  },
+  photoAlbumName: {
+    minWidth: 0,
+    fontSize: 11.5,
+    fontWeight: 700,
+    color: "var(--text-secondary)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
   photoPending: {
     flexShrink: 0,
-    width: 72,
-    height: 72,
-    borderRadius: 10,
+    width: 118,
+    height: 118,
+    borderRadius: 14,
     background: "var(--divider)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
   },
+  // Sized to the album covers so the tops of the row line up; the caption
+  // under each album is what makes those taller, and this has none.
   photoAdd: {
     flexShrink: 0,
-    width: 72,
-    height: 72,
-    borderRadius: 10,
+    width: 118,
+    height: 118,
+    borderRadius: 14,
     border: "1.5px dashed var(--border-input)",
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
+    gap: 4,
     color: "var(--text-muted)",
     cursor: "pointer",
+  },
+  photoAddText: {
+    fontSize: 11.5,
+    fontWeight: 700,
   },
   // Centred rather than bottom-anchored like the other modals: a photo is the
   // content here, not a sheet of controls that slid up over it.

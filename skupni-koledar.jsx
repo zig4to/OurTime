@@ -511,6 +511,28 @@ export function decodePhoto(raw, id) {
   }
 }
 
+// One album per person who uploaded, newest album first, and inside each
+// the photos in the order they were taken. Grouping by author rather than
+// laying every photo in one row is what keeps an outing where four people
+// each emptied their camera roll down to four things to look at.
+export function photoAlbums(photos) {
+  const byAuthor = new Map();
+  for (const photo of photos) {
+    const author = photo.author || "";
+    if (!byAuthor.has(author)) byAuthor.set(author, []);
+    byAuthor.get(author).push(photo);
+  }
+  return [...byAuthor.entries()]
+    .map(([author, list]) => ({ author, photos: list }))
+    // Ranked by each album's newest photo: whoever added something last is
+    // the album someone opening the card is most likely looking for.
+    .sort((a, b) => {
+      const newest = (album) =>
+        album.photos.reduce((max, p) => (p.id > max ? p.id : max), "");
+      return newest(b).localeCompare(newest(a));
+    });
+}
+
 export function sortPhotos(list) {
   return [...list].sort((a, b) => Number(a.id) - Number(b.id) || a.id.localeCompare(b.id));
 }
@@ -2749,7 +2771,11 @@ export default function App() {
   // -1 and the lightbox closes on its own.
   const lightboxPhotos =
     lightbox && window.photos
-      ? dayPhotos[photoGroup(lightbox.iso, lightbox.eventId)] || []
+      ? (dayPhotos[photoGroup(lightbox.iso, lightbox.eventId)] || []).filter(
+          // Scoped to the album that was opened, so swiping stays inside
+          // one person's photos rather than wandering into everyone's.
+          (p) => lightbox.author === undefined || (p.author || "") === lightbox.author
+        )
       : [];
   const lightboxIndex = lightbox
     ? lightboxPhotos.findIndex((p) => p.id === lightbox.id)
@@ -2932,29 +2958,50 @@ export default function App() {
     if (!window.photos) return null;
     const key = photoGroup(iso, eventId);
     const photos = dayPhotos[key] || [];
+    const albums = photoAlbums(photos);
     const pending = photoUploads[key] || 0;
     const inputId = `photo-input-${key}`;
     return (
       <div style={styles.photoBlock}>
         <div style={styles.photoRow}>
-          {photos.map((p) => (
-            <button
-              key={p.id}
-              style={styles.photoThumb}
-              onClick={() => setLightbox({ iso, eventId, id: p.id })}
-              aria-label={`Slika od ${p.author || "neznano"}`}
-            >
-              {/* loading="lazy" matters more here than anywhere else in the
-                  app: the archive grows without bound, and every thumbnail is
-                  a download against a metered egress budget. */}
-              <img
-                src={window.photos.publicUrl(p.path)}
-                alt=""
-                loading="lazy"
-                style={styles.photoThumbImg}
-              />
-            </button>
-          ))}
+          {albums.map(({ author, photos: shots }) => {
+            // The first, not the newest: the cover is what opens, and an album
+            // that opened on its last photo could only be swiped backwards.
+            const cover = shots[0];
+            const more = shots.length - 1;
+            const who = author || "Neznano";
+            return (
+              <button
+                key={author || "__none__"}
+                style={styles.photoAlbum}
+                onClick={() => setLightbox({ iso, eventId, author, id: cover.id })}
+                aria-label={`Slike od ${who} (${shots.length})`}
+                title={`Slike od ${who}`}
+              >
+                <span style={styles.photoAlbumFrame}>
+                  {/* loading="lazy" matters more here than anywhere else in
+                      the app: the archive grows without bound, and every
+                      cover is a download against a metered egress budget. */}
+                  <img
+                    src={window.photos.publicUrl(cover.path)}
+                    alt=""
+                    loading="lazy"
+                    style={styles.photoAlbumImg}
+                  />
+                  <span style={styles.photoAlbumScrim} />
+                  {more > 0 && <span style={styles.photoAlbumCount}>+{more}</span>}
+                </span>
+                <span style={styles.photoAlbumCaption}>
+                  <span style={styles.avatarChip(personColors[author] || GREEN)}>
+                    {initials(who)}
+                  </span>
+                  <span style={styles.photoAlbumName}>
+                    Slike od {who.split(" ")[0]}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
           {Array.from({ length: pending }, (_, i) => (
             <div key={`pending-${i}`} style={styles.photoPending}>
               <div style={styles.loadingDot} />
@@ -2963,7 +3010,8 @@ export default function App() {
           {/* A label rather than a button, because the file input it opens
               has to stay in the DOM to be clickable but must not be seen. */}
           <label htmlFor={inputId} style={styles.photoAdd} title="Dodaj slike">
-            <Plus size={16} />
+            <Plus size={18} />
+            <span style={styles.photoAddText}>Dodaj</span>
             <input
               id={inputId}
               type="file"
