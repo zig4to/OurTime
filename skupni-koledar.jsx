@@ -9,6 +9,7 @@ import {
   Settings,
   Menu,
   Archive,
+  Sparkles,
   ArrowLeft,
   CalendarDays,
   Sun,
@@ -914,6 +915,44 @@ const ARCHIVE_SLAB_DAYS = 30;
 // Days the home list shows before it stops. The window behind it is still
 // the full fourteen -- this only decides how much of it is on screen, so
 // nothing about loading, the event strip or the archive changes.
+// Hand-kept, newest day first. Written from the commit log but not out of
+// it: a commit says what changed in the code, and this has to say what
+// changed for someone opening the calendar. There is no build step here to
+// generate it, so it is updated by hand -- and pruned by hand too, or it
+// grows past the point where anybody reads it.
+const CHANGELOG = [
+  {
+    date: "2026-08-22",
+    items: [
+      "Arhiv preteklih dogodkov, z ločenim prostorom za komentarje po dogodku",
+      "Slike pri preteklih dogodkih, urejene v album za vsakega, ki jih je naložil",
+      "Listanje slik s potegom levo in desno",
+      "Meni zgoraj desno; urejanje profila se je preselilo vanj",
+      "Dotik tujega krogca pokaže, čigav je",
+      "Domača stran kaže deset dni, ostale odpre gumb",
+    ],
+  },
+  {
+    date: "2026-08-21",
+    items: [
+      "Komentarji pod vsakim dogodkom; svoje lahko izbrišeš",
+      "Spremembe drugih se pokažejo v živo, brez osveževanja strani",
+      "Koledar se da namestiti na domači zaslon telefona",
+      "Vsak dobi svojo barvo krogca, dogodek pa svojo barvo kartice",
+      "Trak Aktualni dogodki se da vleči s prstom",
+    ],
+  },
+  {
+    date: "2026-08-20",
+    items: [
+      "Skupni koledar, ki se deli s povezavo",
+      "Dogodki z udeležbo, več na dan",
+      "Svetla in temna tema",
+      "Opombe ob vnosu in hitro polnjenje celega dne",
+    ],
+  },
+];
+
 const DAYS_SHOWN = 10;
 
 // Below this the gesture reads as a tap or a stray wobble, not a swipe, and
@@ -1298,6 +1337,7 @@ export default function App() {
   const [openDay, setOpenDay] = useState(null);
   const [scrollToDay, setScrollToDay] = useState(null);
   const [showAllDays, setShowAllDays] = useState(false);
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
   // Re-rolled once per load, so the two people a collapsed day shows change
   // from visit to visit rather than the same name always leading. A ref and
   // not state: these rows re-render constantly -- the event strip alone
@@ -2711,6 +2751,44 @@ export default function App() {
     </header>
   );
 
+  // Below the day list on both layouts. Collapsed by default: it is the
+  // least urgent thing on the page and would otherwise push the footer down
+  // every time anything shipped.
+  const whatsNewSection = (
+    <div style={styles.whatsNewSection}>
+      <button
+        style={styles.whatsNewToggle}
+        onClick={() => setShowWhatsNew((open) => !open)}
+        aria-expanded={showWhatsNew}
+      >
+        <Sparkles size={13} />
+        Kaj je novega
+        <ChevronRight
+          size={14}
+          style={{
+            marginLeft: "auto",
+            transform: showWhatsNew ? "rotate(90deg)" : "none",
+            transition: "transform 150ms ease",
+          }}
+        />
+      </button>
+      {showWhatsNew && (
+        <div style={styles.whatsNewList}>
+          {CHANGELOG.map((entry) => (
+            <div key={entry.date} style={styles.whatsNewDay}>
+              <div style={styles.whatsNewDate}>{archiveDateLabel(entry.date)}</div>
+              {entry.items.map((item) => (
+                <div key={item} style={styles.whatsNewItem}>
+                  <span style={styles.whatsNewBullet} />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
   const nameEditRow = editingName && (
     <div style={styles.editNameRow}>
       <div style={styles.editNameInputs}>
@@ -3786,6 +3864,8 @@ export default function App() {
             </div>
           </div>
 
+          {whatsNewSection}
+
           <div style={styles.footer}>
             <Users size={13} color="var(--text-faint)" />
             <span>Koledar si delijo vsi, ki odprejo to povezavo</span>
@@ -4128,6 +4208,8 @@ export default function App() {
           </button>
         )}
       </div>
+
+      {whatsNewSection}
 
       <div style={styles.footer}>
         <Users size={13} color="var(--text-faint)" />
