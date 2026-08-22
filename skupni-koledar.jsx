@@ -503,6 +503,60 @@ export function sortPhotos(list) {
 // browses before it is spent. Longest side capped at 1600px takes that to
 // roughly 300 KB, still more detail than the archive ever displays, and the
 // budget lasts hundreds of browses instead.
+// Push notifications, phase one: everything the browser needs to hand us a
+// subscription, and somewhere to keep it. Nothing sends yet -- that needs a
+// server holding the private half of this key pair, and the point of stopping
+// here is to find out whether iOS cooperates before anyone builds one.
+//
+// The public key is meant to ship in client code; it is what the push service
+// checks a message was signed by. The private half is not in this repo and
+// must never be.
+const VAPID_PUBLIC_KEY =
+  "BCyzjXYvw_0jxjMWD4Z8AAqn3tAak8tmvaxEPA1uaiaSoGnzeii8mBFVcdsAgttQNHN_GFOwo96gC-q-iK3YWGs";
+
+// Subscriptions are per device, not per person: one name can be on a phone
+// and a laptop and needs telling on both. The id is generated once and kept
+// in this browser's own storage, so re-subscribing replaces that device's row
+// instead of leaving a dead one behind every time.
+export function pushKey(deviceId) {
+  return `push:${deviceId}`;
+}
+
+// pushManager wants the key as bytes, and hands it over as base64url.
+export function urlBase64ToUint8Array(base64) {
+  const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4))
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  const raw = atob(padded);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+// True only where every piece exists. Checked as a set rather than assumed,
+// because the interesting case is a browser that has some of them: iOS Safari
+// exposes Notification in a tab but refuses to subscribe unless the app was
+// installed to the home screen.
+export function pushSupported() {
+  return (
+    typeof window !== "undefined" &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window &&
+    "Notification" in window
+  );
+}
+
+// iOS grants push to installed web apps only. Detecting the installed state
+// is what lets the UI say so, instead of showing a button that fails.
+export function isStandalone() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true
+  );
+}
+
+export function isIos() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+
 export const PHOTO_MAX_EDGE = 1600;
 const PHOTO_QUALITY = 0.82;
 
@@ -1260,6 +1314,12 @@ export default function App() {
   const [photoUploads, setPhotoUploads] = useState({});
   // The photo shown full-size, as { iso, eventId, id }, or null.
   const [lightbox, setLightbox] = useState(null);
+  // Push: "unsupported" | "blocked" | "needs-install" | "off" | "on", plus a
+  // busy flag while the browser is being asked. Derived on mount rather than
+  // stored, since the permission can be changed outside the app.
+  const [pushState, setPushState] = useState("off");
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState(null);
   // Only one thread is open at a time; a card is small and two expanded
   // threads in one day would push the rest of it off screen.
   const [openComments, setOpenComments] = useState(null);
@@ -2195,6 +2255,114 @@ export default function App() {
     }
   }
 
+  // Which of the five states this browser is in, asked fresh rather than
+  // remembered: someone can revoke the permission in browser settings without
+  // the app ever hearing about it.
+  const refreshPushState = useCallback(async () => {
+    if (!pushSupported()) {
+      // On iOS the pieces only appear once the app is installed, so an iPhone
+      // in a Safari tab is not unsupported -- it is not installed yet, which
+      // is a thing the person can actually fix.
+      setPushState(isIos() && !isStandalone() ? "needs-install" : "unsupported");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setPushState("blocked");
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = reg && (await reg.pushManager.getSubscription());
+      setPushState(sub ? "on" : "off");
+    } catch (e) {
+      setPushState("off");
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshPushState();
+  }, [refreshPushState]);
+
+  // One id per browser, in this device's own storage next to my-name -- the
+  // subscription belongs to the device, not to whoever is signed in on it.
+  async function deviceId() {
+    const res = await window.storage.get("device-id", false);
+    if (res && res.value) return res.value;
+    const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    await window.storage.set("device-id", id, false);
+    return id;
+  }
+
+  async function enablePush() {
+    if (!pushSupported() || !name) return;
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      // Registration first: asking permission is pointless without a worker
+      // to deliver to, and register() resolves before the worker is active,
+      // so `ready` is what guarantees pushManager is usable.
+      await navigator.serviceWorker.register("./sw.js");
+      const reg = await navigator.serviceWorker.ready;
+
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushState(permission === "denied" ? "blocked" : "off");
+        return;
+      }
+
+      // userVisibleOnly is not optional -- browsers refuse a subscription
+      // without it, and it is the promise that every push shows something.
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+
+      const id = await deviceId();
+      try {
+        // toJSON gives endpoint plus the p256dh/auth pair a sender needs; it
+        // is stored whole so phase two needs no knowledge of this shape.
+        await window.storage.set(
+          pushKey(id),
+          JSON.stringify({ name, subscription: sub.toJSON(), createdAt: Date.now() }),
+          true
+        );
+      } catch (e) {
+        // The browser subscription succeeded but nothing recorded it, which
+        // leaves the worst of both states: getSubscription() would report
+        // this device as subscribed while no sender could ever reach it. Undo
+        // the half that did work, so "off" stays the truth.
+        await sub.unsubscribe().catch(() => {});
+        throw e;
+      }
+      setPushState("on");
+    } catch (e) {
+      console.error("push subscribe failed:", e);
+      setPushError(e?.message || String(e));
+      await refreshPushState();
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function disablePush() {
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = reg && (await reg.pushManager.getSubscription());
+      if (sub) await sub.unsubscribe();
+      const id = await deviceId();
+      await window.storage.delete(pushKey(id), true);
+      setPushState("off");
+    } catch (e) {
+      console.error("push unsubscribe failed:", e);
+      setPushError(e?.message || String(e));
+      await refreshPushState();
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
   async function toggleAttendance(iso, id) {
     const existing = dayEvents[iso]?.find((e) => e.id === id);
     if (!existing || !name) return;
@@ -2682,6 +2850,54 @@ export default function App() {
           >
             <Moon size={16} /> Temna
           </button>
+        </div>
+
+        <div style={styles.settingsSection}>
+          <div style={styles.modalTitle}>Obvestila</div>
+          {pushState === "on" ? (
+            <>
+              <p style={styles.introText}>
+                Ta naprava je prijavljena na obvestila. Pošiljanje še ni
+                vklopljeno — zaenkrat samo preverjamo, ali prijava deluje.
+              </p>
+              <button
+                style={styles.introSecondaryButton}
+                disabled={pushBusy}
+                onClick={disablePush}
+              >
+                {pushBusy ? "Odjavljam …" : "Odjavi to napravo"}
+              </button>
+            </>
+          ) : pushState === "needs-install" ? (
+            <p style={styles.introText}>
+              Na iPhonu obvestila delujejo samo, če aplikacijo dodaš na domači
+              zaslon: Deli → Dodaj na domači zaslon. Potem to odpri od tam.
+            </p>
+          ) : pushState === "blocked" ? (
+            <p style={styles.introText}>
+              Obvestila so zavrnjena v nastavitvah brskalnika. Vklopiti jih je
+              treba tam — aplikacija ne more vprašati znova.
+            </p>
+          ) : pushState === "unsupported" ? (
+            <p style={styles.introText}>
+              Ta brskalnik ne podpira obvestil.
+            </p>
+          ) : (
+            <>
+              <p style={styles.introText}>
+                Prijavi to napravo, da bo kasneje lahko dobivala obvestila o
+                novih dogodkih. Brskalnik bo vprašal za dovoljenje.
+              </p>
+              <button
+                style={styles.introSecondaryButton}
+                disabled={pushBusy || !name}
+                onClick={enablePush}
+              >
+                {pushBusy ? "Prijavljam …" : "Vklopi obvestila"}
+              </button>
+            </>
+          )}
+          {pushError && <p style={styles.clashText}>{pushError}</p>}
         </div>
       </div>
     </div>

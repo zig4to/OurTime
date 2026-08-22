@@ -730,6 +730,18 @@ export const styles = {
     gap: 8,
     marginBottom: 8,
   },
+  // A second block inside the settings sheet, ruled off from the theme
+  // controls above it so the two read as separate settings rather than one
+  // long list of buttons.
+  settingsSection: {
+    marginTop: 18,
+    paddingTop: 16,
+    borderTop: "1px solid var(--divider)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    alignItems: "flex-start",
+  },
   pillButton: (active, color, bg) => ({
     flex: 1,
     padding: "9px 6px",

@@ -85,3 +85,33 @@ create policy "arhiv: nalaganje"
 -- Removing a photo from the app deletes its kv_store row, which takes it out
 -- of the archive and leaves the file orphaned; purging files is a dashboard
 -- job, done by someone who meant to.
+
+-- Push subscriptions -------------------------------------------------------
+-- One row per device, under its own "push:" prefix rather than "avail:". Two
+-- reasons it is not squeezed into the avail namespace: personFromKey would
+-- read the device id as a person and it would surface as a fake name in the
+-- calendar, and every window query would carry these rows for no reason.
+--
+-- All four are granted, select included. Withholding select was tried first,
+-- on the reasoning that only the sender reads these and the sender is an Edge
+-- Function using service_role, which bypasses RLS anyway. It does not work:
+-- RLS row visibility also governs the WHERE clause of update and delete, so
+-- an upsert failed outright and -- worse -- a delete matched nothing and
+-- reported success, which would have left dead subscriptions in the table
+-- forever while the app claimed notifications were off.
+--
+-- What that would have protected is small in any case. A subscription cannot
+-- be used to send anything without the VAPID private key, which is not here,
+-- and the names in these rows are already public in the calendar itself. The
+-- only thing select exposes is how many devices exist and their endpoint URLs.
+create policy "push select" on kv_store
+  for select using (key like 'push:%');
+
+create policy "push insert" on kv_store
+  for insert with check (key like 'push:%');
+
+create policy "push update" on kv_store
+  for update using (key like 'push:%') with check (key like 'push:%');
+
+create policy "push delete" on kv_store
+  for delete using (key like 'push:%');
