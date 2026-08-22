@@ -1123,6 +1123,9 @@ export const styles = {
     flexShrink: 0,
     width: 118,
     height: 118,
+    padding: 0,
+    font: "inherit",
+    background: "transparent",
     borderRadius: 14,
     border: "1.5px dashed var(--border-input)",
     display: "flex",
@@ -1132,6 +1135,11 @@ export const styles = {
     gap: 4,
     color: "var(--text-muted)",
     cursor: "pointer",
+  },
+  photoNoticeActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
   },
   photoAddText: {
     fontSize: 11.5,

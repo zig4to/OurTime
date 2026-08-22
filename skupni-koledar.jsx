@@ -1399,6 +1399,8 @@ export default function App() {
   const [photoUploads, setPhotoUploads] = useState({});
   // The photo shown full-size, as { iso, eventId, id }, or null.
   const [lightbox, setLightbox] = useState(null);
+  // { inputId } while the notice before the file picker is up, else null.
+  const [photoNotice, setPhotoNotice] = useState(null);
   // Push: "unsupported" | "blocked" | "needs-install" | "off" | "on", plus a
   // busy flag while the browser is being asked. Derived on mount rather than
   // stored, since the permission can be changed outside the app.
@@ -2977,6 +2979,50 @@ export default function App() {
     </footer>
   );
 
+  // Stands between the add button and the file picker. The picker itself is
+  // still the hidden input the strip renders; this only decides whether the
+  // click reaches it, which is why the input's id travels in the state.
+  const photoNoticeModal = photoNotice && (
+    <div style={styles.modalOverlay} onClick={() => setPhotoNotice(null)}>
+      <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <div>
+            <div style={styles.modalEyebrow}>Preden naložiš</div>
+            <div style={styles.modalTitle}>Naj bodo dobre</div>
+          </div>
+          <button style={styles.modalClose} onClick={() => setPhotoNotice(null)}>
+            Zapri
+          </button>
+        </div>
+        <p style={styles.introText}>
+          Izberi nekaj najboljših. Trideset skoraj enakih nihče ne prelista,
+          prostor pa se napolni hitreje, kot se zdi. Svoje lahko kadar koli
+          odstraniš.
+        </p>
+        <div style={styles.photoNoticeActions}>
+          <button
+            style={styles.smallButtonGhost}
+            onClick={() => setPhotoNotice(null)}
+          >
+            Prekliči
+          </button>
+          <button
+            style={styles.smallButton}
+            onClick={() => {
+              // Read before the state clears, and clicked straight away: the
+              // browser only opens a file picker from inside a real click,
+              // so this cannot wait for a re-render.
+              const input = document.getElementById(photoNotice.inputId);
+              setPhotoNotice(null);
+              if (input) input.click();
+            }}
+          >
+            Izberi slike
+          </button>
+        </div>
+      </div>
+    </div>
+  );
   const settingsModal = showSettings && (
     <div style={styles.modalOverlay} onClick={() => setShowSettings(false)}>
       <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
@@ -3119,25 +3165,31 @@ export default function App() {
               <div style={styles.loadingDot} />
             </div>
           ))}
-          {/* A label rather than a button, because the file input it opens
-              has to stay in the DOM to be clickable but must not be seen. */}
-          <label htmlFor={inputId} style={styles.photoAdd} title="Dodaj slike">
+          {/* A button rather than a label for the input: the notice has to
+              come first, and a label would open the picker on its own. The
+              input stays alongside, hidden, for the notice to reach. */}
+          <button
+            type="button"
+            style={styles.photoAdd}
+            onClick={() => setPhotoNotice({ inputId })}
+            title="Dodaj slike"
+          >
             <Plus size={18} />
             <span style={styles.photoAddText}>Dodaj</span>
-            <input
-              id={inputId}
-              type="file"
-              accept="image/*"
-              multiple
-              style={{ display: "none" }}
-              onChange={(e) => {
-                uploadPhotos(iso, eventId, e.target.files);
-                // Cleared so picking the same file twice in a row still
-                // fires a change event the second time.
-                e.target.value = "";
-              }}
-            />
-          </label>
+          </button>
+          <input
+            id={inputId}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              uploadPhotos(iso, eventId, e.target.files);
+              // Cleared so picking the same file twice in a row still
+              // fires a change event the second time.
+              e.target.value = "";
+            }}
+          />
         </div>
       </div>
     );
@@ -3591,6 +3643,7 @@ export default function App() {
         {isDesktop ? <div style={styles.desktopContainer}>{shell}</div> : shell}
         {photoLightbox}
         {settingsModal}
+        {photoNoticeModal}
       </div>
     );
   }
@@ -3895,6 +3948,7 @@ export default function App() {
 
         {viewPersonModal}
         {settingsModal}
+        {photoNoticeModal}
       </div>
     );
   }
@@ -4238,6 +4292,7 @@ export default function App() {
 
       {viewPersonModal}
       {settingsModal}
+      {photoNoticeModal}
     </div>
   );
 }
