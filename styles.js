@@ -1072,12 +1072,52 @@ export const styles = {
     flexDirection: "column",
     gap: 10,
   },
-  lightboxImg: {
+  // Positioned so the prev/next buttons can sit on the photo itself.
+  lightboxStage: {
+    position: "relative",
+    display: "flex",
+    justifyContent: "center",
+  },
+  lightboxImg: (dragging, dragPx) => ({
     maxWidth: "100%",
     maxHeight: "78vh",
     objectFit: "contain",
     borderRadius: 12,
     display: "block",
+    transform: `translateX(${dragPx}px)`,
+    // Follows the finger exactly while it is down, eases back or onward
+    // once it lifts.
+    transition: dragging ? "none" : "transform 220ms ease",
+    // Sideways is ours; pinch and vertical stay the browser's, so a photo
+    // can still be zoomed into.
+    touchAction: "pan-y pinch-zoom",
+    cursor: dragging ? "grabbing" : "grab",
+    userSelect: "none",
+  }),
+  // On the photo rather than beside it: the stage is only as wide as the
+  // picture, and a button outside it would drift with every aspect ratio.
+  lightboxNav: (side) => ({
+    position: "absolute",
+    [side]: 8,
+    top: "50%",
+    transform: "translateY(-50%)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 36,
+    height: 36,
+    borderRadius: "50%",
+    color: "#fff",
+    background: "rgba(20, 30, 25, 0.45)",
+    border: "none",
+    cursor: "pointer",
+  }),
+  lightboxCount: {
+    flexShrink: 0,
+    fontSize: 12.5,
+    fontWeight: 700,
+    color: "#fff",
+    opacity: 0.75,
   },
   lightboxBar: {
     display: "flex",

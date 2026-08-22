@@ -845,6 +845,127 @@ const NAME_POPUP_MS = 3000;
 // button that opens the day, and a button inside a button is invalid markup
 // that browsers quietly rearrange. stopPropagation is what keeps the tap
 // from opening the day as well.
+// One event's photos, full size, one at a time. Swipe or drag sideways to
+// move between them; arrow keys do the same where there is a keyboard.
+//
+// Its own component so the drag lives beside the thing being dragged. App is
+// long enough already, and this needs three pieces of state that nothing
+// else in it would ever read.
+function PhotoLightbox({ photos, index, urlFor, onClose, onSelect, canDelete, onDelete }) {
+  const [dragPx, setDragPx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startRef = useRef(null);
+
+  const photo = photos[index];
+  const hasPrev = index > 0;
+  const hasNext = index < photos.length - 1;
+
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowLeft" && hasPrev) onSelect(index - 1);
+      else if (e.key === "ArrowRight" && hasNext) onSelect(index + 1);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [index, hasPrev, hasNext, onClose, onSelect]);
+
+  // Tracked on the window rather than the image, and without pointer
+  // capture: a drag that leaves the photo has to keep counting, and capture
+  // would retarget the click that ends it -- the same trap the event strip
+  // fell into.
+  useEffect(() => {
+    if (!dragging) return;
+
+    function move(e) {
+      if (startRef.current === null) return;
+      setDragPx(e.clientX - startRef.current);
+    }
+
+    function end(e) {
+      const startX = startRef.current;
+      startRef.current = null;
+      setDragPx(0);
+      setDragging(false);
+      if (startX === null || e.type === "pointercancel") return;
+      const dx = e.clientX - startX;
+      if (Math.abs(dx) < SWIPE_THRESHOLD_PX) return;
+      // Dragging left pulls the next photo in from the right, the direction
+      // the picture itself moves under the finger.
+      if (dx < 0 && hasNext) onSelect(index + 1);
+      else if (dx > 0 && hasPrev) onSelect(index - 1);
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, [dragging, index, hasPrev, hasNext, onSelect]);
+
+  // At the ends the photo still follows the finger, but only halfway. It
+  // gives way rather than refusing, which is how a list says it has run out.
+  const resisted =
+    (dragPx < 0 && !hasNext) || (dragPx > 0 && !hasPrev) ? dragPx / 3 : dragPx;
+
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.lightboxInner} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.lightboxStage}>
+          <img
+            src={urlFor(photo.path)}
+            alt=""
+            draggable={false}
+            style={styles.lightboxImg(dragging, resisted)}
+            onPointerDown={(e) => {
+              if (photos.length < 2) return;
+              startRef.current = e.clientX;
+              setDragging(true);
+            }}
+          />
+          {hasPrev && (
+            <button
+              style={styles.lightboxNav("left")}
+              onClick={() => onSelect(index - 1)}
+              aria-label="Prejšnja slika"
+            >
+              <ChevronRight size={20} style={{ transform: "rotate(180deg)" }} />
+            </button>
+          )}
+          {hasNext && (
+            <button
+              style={styles.lightboxNav("right")}
+              onClick={() => onSelect(index + 1)}
+              aria-label="Naslednja slika"
+            >
+              <ChevronRight size={20} />
+            </button>
+          )}
+        </div>
+        <div style={styles.lightboxBar}>
+          <span style={styles.lightboxAuthor}>
+            {photo.author ? `Naložil: ${photo.author}` : ""}
+          </span>
+          {photos.length > 1 && (
+            <span style={styles.lightboxCount}>
+              {index + 1} / {photos.length}
+            </span>
+          )}
+          {/* Only your own, the rule the comments already follow. */}
+          {canDelete && (
+            <button style={styles.deleteButton} onClick={onDelete}>
+              <Trash2 size={12} /> Odstrani
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PersonChip({ name, color, style, self }) {
   const [at, setAt] = useState(null);
   const chipRef = useRef(null);
@@ -2438,37 +2559,29 @@ export default function App() {
     </div>
   );
 
-  const lightboxPhoto =
-    lightbox &&
-    window.photos &&
-    (dayPhotos[photoGroup(lightbox.iso, lightbox.eventId)] || []).find(
-      (p) => p.id === lightbox.id
-    );
+  // The whole set the open photo belongs to, so the lightbox can move within
+  // it. Deleting the current one drops it out of the list, findIndex returns
+  // -1 and the lightbox closes on its own.
+  const lightboxPhotos =
+    lightbox && window.photos
+      ? dayPhotos[photoGroup(lightbox.iso, lightbox.eventId)] || []
+      : [];
+  const lightboxIndex = lightbox
+    ? lightboxPhotos.findIndex((p) => p.id === lightbox.id)
+    : -1;
 
-  const photoLightbox = lightboxPhoto && (
-    <div style={styles.modalOverlay} onClick={() => setLightbox(null)}>
-      <div style={styles.lightboxInner} onClick={(e) => e.stopPropagation()}>
-        <img
-          src={window.photos.publicUrl(lightboxPhoto.path)}
-          alt=""
-          style={styles.lightboxImg}
-        />
-        <div style={styles.lightboxBar}>
-          <span style={styles.lightboxAuthor}>
-            {lightboxPhoto.author ? `Naložil: ${lightboxPhoto.author}` : ""}
-          </span>
-          {/* Only your own, the rule the comments already follow. */}
-          {lightboxPhoto.author === name && (
-            <button
-              style={styles.deleteButton}
-              onClick={() => deletePhoto(lightbox.iso, lightbox.eventId, lightbox.id)}
-            >
-              <Trash2 size={12} /> Odstrani
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+  const photoLightbox = lightboxIndex >= 0 && (
+    <PhotoLightbox
+      photos={lightboxPhotos}
+      index={lightboxIndex}
+      urlFor={(path) => window.photos.publicUrl(path)}
+      onClose={() => setLightbox(null)}
+      onSelect={(next) =>
+        setLightbox({ ...lightbox, id: lightboxPhotos[next].id })
+      }
+      canDelete={lightboxPhotos[lightboxIndex].author === name}
+      onDelete={() => deletePhoto(lightbox.iso, lightbox.eventId, lightbox.id)}
+    />
   );
 
   const viewPersonModal = viewPerson && (
