@@ -3221,8 +3221,7 @@ export default function App() {
       {showFeedback && (
         <div style={styles.whatsNewDay}>
           <p style={styles.installLead}>
-            Kaj deluje, kaj te moti, kaj manjka. Piši naravnost – popravi se
-            tisto, kar nekdo pove.
+            Kaj deluje, kaj te moti, kaj manjka. Piši.
           </p>
           {renderCommentPanel(
             FEEDBACK_ISO,
