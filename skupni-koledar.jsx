@@ -3977,24 +3977,29 @@ export default function App() {
                     <div style={styles.eventDuration}>{event.duration}</div>
                   )}
                 </div>
-                <div style={styles.eventHeaderActions}>
-                  {canEdit && (
+                {/* The reminder copy is a heads-up, not a place to work from:
+                    editing and adding both belong to the day itself, which is
+                    a tap away and is where the form would open anyway. */}
+                {!reminder && (
+                  <div style={styles.eventHeaderActions}>
+                    {canEdit && (
+                      <button
+                        style={styles.editEntryButton}
+                        onClick={() => startEditingEvent(iso, event.id)}
+                        aria-label="Uredi dogodek"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    )}
                     <button
                       style={styles.editEntryButton}
-                      onClick={() => startEditingEvent(iso, event.id)}
-                      aria-label="Uredi dogodek"
+                      onClick={() => startEditingEvent(iso, null)}
+                      aria-label="Dodaj nov dogodek"
                     >
-                      <Pencil size={13} />
+                      <Plus size={13} />
                     </button>
-                  )}
-                  <button
-                    style={styles.editEntryButton}
-                    onClick={() => startEditingEvent(iso, null)}
-                    aria-label="Dodaj nov dogodek"
-                  >
-                    <Plus size={13} />
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
               {event.description && (
                 <p style={styles.eventDescription}>{event.description}</p>
