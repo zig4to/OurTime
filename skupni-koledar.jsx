@@ -3491,7 +3491,7 @@ export default function App() {
               Dodaj
             </button>
           </div>
-          {existing && existing.createdBy === name && (
+          {existing && (existing.createdBy === name || isAdmin) && (
             <button
               style={styles.deleteButton}
               onClick={() => deleteEvent(iso, id)}
@@ -3512,7 +3512,9 @@ export default function App() {
             return eventForm(event.id);
           }
           const attending = !!name && event.attendees.includes(name);
-          const canEdit = event.createdBy === name;
+          // The admin can edit anyone's event, the same reach they already
+          // have over anyone's availability entry.
+          const canEdit = event.createdBy === name || isAdmin;
           // Anyone mid-exit is drawn after the real attendees, so the chips
           // that are staying never shift sideways to fill the gap while the
           // leaver is still shrinking into it. The filter covers someone who

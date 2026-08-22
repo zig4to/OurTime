@@ -1054,7 +1054,7 @@ export const styles = {
     clipPath: "polygon(31% 0, 100% 0, 100% 100%, 11% 100%)",
     // Held back from full strength so the card keeps its own colour and the
     // picture reads as part of it rather than pasted on top.
-    opacity: 0.6,
+    opacity: 0.45,
     // The clip alone left a hard diagonal. This fades the picture in across
     // that edge instead: 106deg is perpendicular to the cut, so the bands of
     // the gradient run parallel to it and the ramp is even along its whole
