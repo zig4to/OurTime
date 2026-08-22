@@ -18,26 +18,22 @@
     <meta name="apple-mobile-web-app-title" content="masCajt" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#2F6F5E" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#14181A" media="(prefers-color-scheme: dark)" />
+    <!-- The app rewrites this whenever the theme changes; the value here is
+         the default it starts on. -->
+    <meta name="theme-color" content="#14181A" />
 
     <style>
       /* The app paints its own background, but only inside its root element.
          Standalone on iOS there is no browser behind it, so overscrolling
          past the top or bottom exposed the page itself -- white, whichever
          theme was chosen. --bg lands as soon as the app sets data-theme; the
-         literals cover the moment before that, matched to the system setting
-         because the saved preference is not readable that early. */
+         literal covers the moment before that. It matches the app default
+         rather than the system setting -- the saved preference is not
+         readable this early, and dark is what an unanswered device gets. */
       html,
       body {
         margin: 0;
-        background: var(--bg, #faf9f6);
-      }
-      @media (prefers-color-scheme: dark) {
-        html,
-        body {
-          background: var(--bg, #14181a);
-        }
+        background: var(--bg, #14181a);
       }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />

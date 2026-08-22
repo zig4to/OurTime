@@ -1566,7 +1566,10 @@ export default function App() {
   const [editingDay, setEditingDay] = useState(null); // iso of the day currently being edited, or null
   const [editingPerson, setEditingPerson] = useState(null); // whose entry editingDay refers to (admin can edit anyone's)
   const [viewPerson, setViewPerson] = useState(null); // { name, hours, iso, dateText }
-  const [theme, setTheme] = useState("light");
+  // Dark until the saved choice loads, and dark for anyone who has never
+  // made one. Not read from prefers-color-scheme: the calendar is looked at
+  // in the evening, and the phone-wide setting says nothing about that.
+  const [theme, setTheme] = useState("dark");
   const [showSettings, setShowSettings] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   // "calendar" | "archive". Two pages, so a string rather than a router.
@@ -1651,6 +1654,12 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    // The browser chrome and the iOS status bar read this, and it used to be
+    // two tags keyed to prefers-color-scheme -- which tracks the phone, not
+    // the app. A light phone running the calendar dark got a cream bar over
+    // a near-black page.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", theme === "dark" ? "#14181A" : "#2F6F5E");
   }, [theme]);
 
   // Closing on any pointer down outside the menu, rather than on the menu
