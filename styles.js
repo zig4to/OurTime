@@ -1037,6 +1037,17 @@ export const styles = {
     objectFit: "cover",
     objectPosition: "right center",
     clipPath: "polygon(72% 0, 100% 0, 100% 100%, 48% 100%)",
+    // Held back from full strength so the card keeps its own colour and the
+    // picture reads as part of it rather than pasted on top.
+    opacity: 0.82,
+    // The clip alone left a hard diagonal. This fades the picture in across
+    // that edge instead: 113deg is perpendicular to the cut, so the bands of
+    // the gradient run parallel to it and the ramp is even along its whole
+    // length. The stops are measured along that axis across the whole card,
+    // not across the wedge, which is why they start well before it. Prefixed
+    // as well, for Safari.
+    maskImage: "linear-gradient(113deg, transparent 30%, #000 60%)",
+    WebkitMaskImage: "linear-gradient(113deg, transparent 30%, #000 60%)",
     zIndex: -1,
     pointerEvents: "none",
   },
