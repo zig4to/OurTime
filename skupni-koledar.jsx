@@ -398,15 +398,26 @@ export function decodeEvent(raw, id) {
 // one is then an insert of a fresh key instead of a read-modify-write of the
 // event, so two people commenting in the same moment cannot overwrite each
 // other -- and text someone typed is a worse thing to lose than a toggle.
+// An event carries two separate threads. The calendar's is for arranging it
+// beforehand; the archive's is for what it turned out to be. They are two
+// stores rather than one list with a flag because an event leaves the
+// calendar the day after it happens -- the arranging is over, and the point
+// of the archive thread is a clean page to write on.
 const COMMENT_MARKER = "__comment__";
+const RECAP_MARKER = "__recap__";
 
-export function commentKey(iso, eventId, commentId) {
-  return `avail:${iso}:${COMMENT_MARKER}${eventId}:${commentId}`;
+// "plan" is the default everywhere, so every existing call site and every
+// row already written keeps meaning what it meant.
+const THREAD_MARKERS = { plan: COMMENT_MARKER, recap: RECAP_MARKER };
+
+export function commentKey(iso, eventId, commentId, kind = "plan") {
+  return `avail:${iso}:${THREAD_MARKERS[kind]}${eventId}:${commentId}`;
 }
 
-// One event's thread, addressed the same way everywhere it is held.
-export function commentGroup(iso, eventId) {
-  return `${iso}:${eventId}`;
+// One event's thread, addressed the same way everywhere it is held. The kind
+// goes last so that whatever splits the iso off the front still can.
+export function commentGroup(iso, eventId, kind = "plan") {
+  return `${iso}:${eventId}:${kind}`;
 }
 
 // Splits the person part of a comment key back into its two ids, on the last
@@ -423,9 +434,15 @@ export function parseMarkedPerson(person, marker) {
   return { ownerId: rest.slice(0, at), itemId: rest.slice(at + 1) };
 }
 
+// Which thread a comment key belongs to, along with its two ids. Tries each
+// marker rather than being told which to expect, so one call handles a row
+// arriving from the window query, the archive query or the live feed alike.
 export function parseCommentPerson(person) {
-  const parsed = parseMarkedPerson(person, COMMENT_MARKER);
-  return parsed && { eventId: parsed.ownerId, commentId: parsed.itemId };
+  for (const kind of Object.keys(THREAD_MARKERS)) {
+    const parsed = parseMarkedPerson(person, THREAD_MARKERS[kind]);
+    if (parsed) return { kind, eventId: parsed.ownerId, commentId: parsed.itemId };
+  }
+  return null;
 }
 
 export function encodeComment(comment) {
@@ -1459,11 +1476,11 @@ export default function App() {
         const iso = isoFromKey(row.key);
         const person = personFromKey(row.key);
         if (!person || !(iso in result)) continue;
-        if (person.startsWith(COMMENT_MARKER)) {
+        if (person.startsWith(COMMENT_MARKER) || person.startsWith(RECAP_MARKER)) {
           const parsed = parseCommentPerson(person);
           const comment = parsed && decodeComment(row.value, parsed.commentId);
           if (comment) {
-            const group = commentGroup(iso, parsed.eventId);
+            const group = commentGroup(iso, parsed.eventId, parsed.kind);
             (comments[group] = comments[group] || []).push(comment);
           }
           continue;
@@ -1559,11 +1576,11 @@ export default function App() {
           const iso = isoFromKey(row.key);
           const person = personFromKey(row.key);
           if (!iso || !person) continue;
-          if (person.startsWith(COMMENT_MARKER)) {
+          if (person.startsWith(COMMENT_MARKER) || person.startsWith(RECAP_MARKER)) {
             const parsed = parseCommentPerson(person);
             const comment = parsed && decodeComment(row.value, parsed.commentId);
             if (comment) {
-              const group = commentGroup(iso, parsed.eventId);
+              const group = commentGroup(iso, parsed.eventId, parsed.kind);
               (comments[group] = comments[group] || []).push(comment);
             }
           } else if (person.startsWith(PHOTO_MARKER)) {
@@ -1682,10 +1699,10 @@ export default function App() {
             return;
           }
 
-          if (person.startsWith(COMMENT_MARKER)) {
+          if (person.startsWith(COMMENT_MARKER) || person.startsWith(RECAP_MARKER)) {
             const parsed = parseCommentPerson(person);
             if (!parsed) return;
-            const group = commentGroup(iso, parsed.eventId);
+            const group = commentGroup(iso, parsed.eventId, parsed.kind);
             setDayComments((prev) => {
               const list = prev[group] || [];
               if (type === "DELETE") {
@@ -2159,8 +2176,8 @@ export default function App() {
     }, CHIP_EXIT_MS);
   }
 
-  async function postComment(iso, eventId) {
-    const group = commentGroup(iso, eventId);
+  async function postComment(iso, eventId, kind = "plan") {
+    const group = commentGroup(iso, eventId, kind);
     const text = (commentDrafts[group] || "").trim();
     if (!text || !name) return;
     const comment = { id: String(Date.now()), author: name, text };
@@ -2171,7 +2188,7 @@ export default function App() {
     setCommentDrafts((prev) => ({ ...prev, [group]: "" }));
     try {
       await window.storage.set(
-        commentKey(iso, eventId, comment.id),
+        commentKey(iso, eventId, comment.id, kind),
         encodeComment(comment),
         true
       );
@@ -2183,14 +2200,14 @@ export default function App() {
 
   // Only what you wrote. Same rule the events already follow, and the one
   // place a stray tap would destroy something nobody can get back.
-  async function deleteComment(iso, eventId, commentId) {
-    const group = commentGroup(iso, eventId);
+  async function deleteComment(iso, eventId, commentId, kind = "plan") {
+    const group = commentGroup(iso, eventId, kind);
     setDayComments((prev) => ({
       ...prev,
       [group]: (prev[group] || []).filter((c) => c.id !== commentId),
     }));
     try {
-      await window.storage.delete(commentKey(iso, eventId, commentId), true);
+      await window.storage.delete(commentKey(iso, eventId, commentId, kind), true);
     } catch (e) {
       setError("Komentarja ni bilo mogoče izbrisati. Poskusi znova.");
       loadAllData();
@@ -2966,8 +2983,8 @@ export default function App() {
     );
   }
 
-  function renderCommentThread(iso, eventId) {
-    const key = commentGroup(iso, eventId);
+  function renderCommentThread(iso, eventId, kind = "plan") {
+    const key = commentGroup(iso, eventId, kind);
     const comments = dayComments[key] || [];
     const open = openComments === key;
     const draft = commentDrafts[key] || "";
@@ -3008,7 +3025,7 @@ export default function App() {
                     {c.author === name && (
                       <button
                         style={styles.commentDelete}
-                        onClick={() => deleteComment(iso, eventId, c.id)}
+                        onClick={() => deleteComment(iso, eventId, c.id, kind)}
                         aria-label="Izbriši komentar"
                         title="Izbriši komentar"
                       >
@@ -3027,7 +3044,7 @@ export default function App() {
                 onChange={(e) =>
                   setCommentDrafts((prev) => ({ ...prev, [key]: e.target.value }))
                 }
-                onKeyDown={(e) => e.key === "Enter" && postComment(iso, eventId)}
+                onKeyDown={(e) => e.key === "Enter" && postComment(iso, eventId, kind)}
               />
               <button
                 style={{
@@ -3035,7 +3052,7 @@ export default function App() {
                   opacity: draft.trim() ? 1 : 0.5,
                 }}
                 disabled={!draft.trim()}
-                onClick={() => postComment(iso, eventId)}
+                onClick={() => postComment(iso, eventId, kind)}
               >
                 Objavi
               </button>
@@ -3296,7 +3313,7 @@ export default function App() {
         {archiveEntries.map(({ iso, event }) => {
           const cardKey = `${iso}:${event.id}`;
           const open = openArchiveEvent === cardKey;
-          const comments = dayComments[commentGroup(iso, event.id)] || [];
+          const comments = dayComments[commentGroup(iso, event.id, "recap")] || [];
           const going = event.attendees.length;
           return (
             <div key={cardKey} style={styles.archiveCard(eventHues[eventKey(iso, event.id)])}>
@@ -3364,7 +3381,7 @@ export default function App() {
                   )}
 
                   {renderPhotoStrip(iso, event.id)}
-                  {renderCommentThread(iso, event.id)}
+                  {renderCommentThread(iso, event.id, "recap")}
                 </div>
               )}
             </div>
