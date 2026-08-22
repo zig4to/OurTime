@@ -4198,13 +4198,17 @@ export default function App() {
             </div>
           );
         })}
-        {!showAllDays && days.length > DAYS_SHOWN && (
+        {days.length > DAYS_SHOWN && (
           <button
             style={styles.moreDaysButton}
-            onClick={() => setShowAllDays(true)}
+            onClick={() => setShowAllDays((open) => !open)}
           >
-            Pokaži še {days.length - DAYS_SHOWN}{" "}
-            {pluralSl(days.length - DAYS_SHOWN, ["dan", "dneva", "dnevi", "dni"])}
+            {showAllDays
+              ? "Pokaži manj"
+              : `Pokaži še ${days.length - DAYS_SHOWN} ${pluralSl(
+                  days.length - DAYS_SHOWN,
+                  ["dan", "dneva", "dnevi", "dni"]
+                )}`}
           </button>
         )}
       </div>
