@@ -1888,8 +1888,12 @@ export default function App() {
       // today is a better answer than opening nothing.
       const fromHash = (window.location.hash || "").replace(/^#/, "");
       if (/^\d{4}-\d{2}-\d{2}$/.test(fromHash) && days.includes(fromHash)) {
-        setOpenDay(fromHash);
-        setScrollToDay(fromHash);
+        // Through openEventDay rather than setOpenDay: past the tenth day a
+        // card is not rendered until the list is expanded, so setting it open
+        // directly would scroll to nothing and look like the tap did nothing.
+        // The event strip already needed solving this, and a notification is
+        // the same arrival from outside the list.
+        openEventDay(fromHash);
         // Cleared so a reload later does not jump back to a day the person
         // has long since dealt with.
         history.replaceState(null, "", window.location.pathname + window.location.search);
