@@ -611,23 +611,20 @@ export const styles = {
     fontStyle: "italic",
   },
   avatarChip: avatarChipStyle,
-  personChipWrap: {
-    position: "relative",
-    display: "inline-flex",
-    flexShrink: 0,
-  },
-  // Beside the chip rather than above it. The cards these sit in clip
-  // their own overflow to keep their rounded corners, and a bubble above a
-  // chip in a collapsed day row is taller than the room left over it -- it
-  // came out with its top sliced off. There is always width to the right.
+  // Centred over the chip and positioned against the viewport rather than
+  // the page. Absolute placement put it inside cards that clip their own
+  // overflow to keep their rounded corners, and above a chip in a collapsed
+  // day row there is less headroom than the bubble is tall -- it came out
+  // with its top sliced off. Fixed escapes that: its containing block is
+  // the viewport, which no ancestor's overflow can crop.
   //
   // pointer-events: none so it can never swallow a tap meant for whatever
   // it happens to be covering.
-  personChipName: {
-    position: "absolute",
-    left: "calc(100% + 6px)",
-    top: "50%",
-    transform: "translateY(-50%)",
+  personChipName: (x, y) => ({
+    position: "fixed",
+    left: x,
+    top: y - 6,
+    transform: "translate(-50%, -100%)",
     zIndex: 30,
     padding: "4px 8px",
     borderRadius: 8,
@@ -637,7 +634,7 @@ export const styles = {
     color: "var(--card-bg)",
     background: "var(--tooltip-bg)",
     pointerEvents: "none",
-  },
+  }),
   // The overflow count in a day row. Same circle as a person's chip so the
   // group still reads as one run, but neutral: it stands for a number, and any
   // of the status colors would claim those people are free, partly free or

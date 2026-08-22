@@ -846,19 +846,36 @@ const NAME_POPUP_MS = 3000;
 // that browsers quietly rearrange. stopPropagation is what keeps the tap
 // from opening the day as well.
 function PersonChip({ name, color, style, self }) {
-  const [shown, setShown] = useState(false);
+  const [at, setAt] = useState(null);
+  const chipRef = useRef(null);
   const hideRef = useRef(null);
 
+  const hide = useCallback(() => {
+    clearTimeout(hideRef.current);
+    setAt(null);
+  }, []);
+
   useEffect(() => () => clearTimeout(hideRef.current), []);
+
+  // A fixed bubble keeps its place on the screen, not in the page, so any
+  // scroll leaves it pointing at nothing. Cheaper to dismiss it than to
+  // chase the chip.
+  useEffect(() => {
+    if (!at) return;
+    window.addEventListener("scroll", hide, { passive: true, capture: true });
+    return () => window.removeEventListener("scroll", hide, { capture: true });
+  }, [at, hide]);
 
   // Always on a timer, hover included. A chip can slide under a resting
   // cursor when the row it is in re-lays out -- withdrawing from an event
   // shifts everyone left -- and a hover that only ends on mouseleave then
   // has nothing to end it.
   function reveal() {
+    const box = chipRef.current && chipRef.current.getBoundingClientRect();
+    if (!box) return;
     clearTimeout(hideRef.current);
-    setShown(true);
-    hideRef.current = setTimeout(() => setShown(false), NAME_POPUP_MS);
+    setAt({ x: box.left + box.width / 2, y: box.top });
+    hideRef.current = setTimeout(() => setAt(null), NAME_POPUP_MS);
   }
 
   // Your own chip stays inert. On an event it is the control that withdraws
@@ -869,8 +886,9 @@ function PersonChip({ name, color, style, self }) {
   }
 
   return (
-    <span style={styles.personChipWrap}>
+    <>
       <span
+        ref={chipRef}
         style={{ ...styles.avatarChip(color), ...style }}
         onClick={(e) => {
           // Or the tap would also reach the button that opens the day.
@@ -878,16 +896,13 @@ function PersonChip({ name, color, style, self }) {
           reveal();
         }}
         onMouseEnter={reveal}
-        onMouseLeave={() => {
-          clearTimeout(hideRef.current);
-          setShown(false);
-        }}
+        onMouseLeave={hide}
         aria-label={name}
       >
         {initials(name)}
       </span>
-      {shown && <span style={styles.personChipName}>{name}</span>}
-    </span>
+      {at && <span style={styles.personChipName(at.x, at.y)}>{name}</span>}
+    </>
   );
 }
 
