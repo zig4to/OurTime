@@ -1174,6 +1174,20 @@ export const styles = {
     textDecoration: "none",
     cursor: "pointer",
   },
+  // The same button with the label taken out: square, so it reads as an icon
+  // rather than a text button someone forgot to fill in.
+  eventLinkIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 7,
+    color: GREEN,
+    background: "var(--card-bg)",
+    border: `1px solid ${GREEN}`,
+    borderRadius: 9,
+    textDecoration: "none",
+    cursor: "pointer",
+  },
   // A slanted panel down the right-hand side. It covers the whole card and
   // is cut back to the wedge, so the corners stay square against the card
   // rather than needing their own box: 72% across at the top, 48% at the

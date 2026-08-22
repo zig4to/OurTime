@@ -4013,13 +4013,18 @@ export default function App() {
                     <Link size={12} /> Povezava
                   </a>
                 )}
+                {/* Icon only, so it takes the corner rather than a line. The
+                    label survives as the accessible name and the tooltip --
+                    an unlabelled square is a guess otherwise. */}
                 <a
-                  style={styles.eventLink}
+                  style={styles.eventLinkIcon}
                   href={CHECKLIST_URL}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label="Nam Puzabu"
+                  title="Nam Puzabu"
                 >
-                  <ListChecks size={12} /> Nam Puzabu
+                  <ListChecks size={14} />
                 </a>
               </div>
               {/* Confirming removes this row rather than switching it to a
