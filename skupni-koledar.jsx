@@ -4109,7 +4109,6 @@ export default function App() {
                         "komentarjev",
                       ])}
                     </span>
-                    {event.keyword && <span>{event.keyword}</span>}
                   </div>
 
                   {event.description && (
