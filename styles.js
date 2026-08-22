@@ -1031,12 +1031,17 @@ export const styles = {
   },
   eventCardImage: {
     position: "absolute",
-    inset: 0,
-    width: "100%",
+    // Only as wide as the wedge, not the whole card. Spanning the card and
+    // clipping it back put the picture's centre out under the text, so what
+    // showed through the wedge was always its right-hand end. Sized to the
+    // wedge, object-position: center means the middle of the picture is what
+    // the wedge shows.
+    inset: "0 0 0 44%",
     height: "100%",
     objectFit: "cover",
-    objectPosition: "right center",
-    clipPath: "polygon(72% 0, 100% 0, 100% 100%, 48% 100%)",
+    objectPosition: "center",
+    // Card-relative 72%/48% expressed against this narrower box.
+    clipPath: "polygon(50% 0, 100% 0, 100% 100%, 7% 100%)",
     // Held back from full strength so the card keeps its own colour and the
     // picture reads as part of it rather than pasted on top.
     opacity: 0.82,
@@ -1046,8 +1051,8 @@ export const styles = {
     // length. The stops are measured along that axis across the whole card,
     // not across the wedge, which is why they start well before it. Prefixed
     // as well, for Safari.
-    maskImage: "linear-gradient(113deg, transparent 30%, #000 60%)",
-    WebkitMaskImage: "linear-gradient(113deg, transparent 30%, #000 60%)",
+    maskImage: "linear-gradient(113deg, transparent 4%, #000 52%)",
+    WebkitMaskImage: "linear-gradient(113deg, transparent 4%, #000 52%)",
     zIndex: -1,
     pointerEvents: "none",
   },
