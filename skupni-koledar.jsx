@@ -3495,18 +3495,21 @@ export default function App() {
   // events (a day can have several, oldest first) plus whichever one is
   // being created or edited. Only an event's creator can edit or delete it;
   // anyone can add another event or toggle their own attendance.
-  function renderEventSection(iso) {
+  // `reminder` marks the copy drawn under "Ne pozabi, jutri gremo". Tomorrow
+  // can be on screen twice at once -- there and inside its own day card -- and
+  // the two copies must not both claim the same DOM id or the same focus.
+  function renderEventSection(iso, { reminder = false } = {}) {
     const events = dayEvents[iso] || [];
     const isEditingHere = editingEvent && editingEvent.iso === iso;
 
     function eventForm(id) {
-      const eventImageInputId = `event-image-${iso}-${id || "new"}`;
+      const eventImageInputId = `event-image-${reminder ? "jutri-" : ""}${iso}-${id || "new"}`;
       const existing = id != null ? events.find((e) => e.id === id) : null;
       return (
         <div style={styles.eventCard(eventHues[eventKey(iso, id)])} key={id || "new"}>
           <div style={styles.eventEyebrow}>Dogodek</div>
           <input
-            autoFocus
+            autoFocus={!reminder}
             style={styles.input}
             placeholder="Ime dogodka"
             value={eventTitleDraft}
@@ -3971,6 +3974,20 @@ export default function App() {
     );
   }
 
+  // Tomorrow's event repeated above the list -- the same card the day itself
+  // draws, not a summary of it, so it can be answered from here. Only
+  // tomorrow, and only when there is something: a heading over nothing would
+  // be a standing reminder of no plans.
+  const tomorrowIso = addDays(today, 1);
+  const tomorrowReminder = (dayEvents[tomorrowIso] || []).length > 0 && (
+    <div style={styles.tomorrowSection}>
+      <div style={styles.recentEventsHeading}>Ne pozabi, jutri gremo</div>
+      <div style={styles.tomorrowCards}>
+        {renderEventSection(tomorrowIso, { reminder: true })}
+      </div>
+    </div>
+  );
+
   if (isDesktop) {
     const iso = openDay || today || null;
     const selectedIso = days.includes(iso) ? iso : today;
@@ -3992,6 +4009,8 @@ export default function App() {
           {nameClashRow}
 
           {recentEventsRow}
+
+          {tomorrowReminder}
 
           {error && <div style={styles.errorBanner}>{error}</div>}
 
@@ -4287,6 +4306,8 @@ export default function App() {
       {nameClashRow}
 
       {recentEventsRow}
+
+      {tomorrowReminder}
 
       {error && <div style={styles.errorBanner}>{error}</div>}
 

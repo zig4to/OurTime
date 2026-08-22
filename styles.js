@@ -540,6 +540,15 @@ export const styles = {
     gap: 16,
     padding: "4px 20px 14px 20px",
   },
+  tomorrowSection: {
+    marginTop: 26,
+  },
+  // The day list's own gutter, so the card lines up with the day cards under
+  // it rather than sitting a few pixels proud of them. The card carries its
+  // own 14px bottom margin, which becomes the gap down to the list.
+  tomorrowCards: {
+    padding: "0 16px",
+  },
   recentEventsHeading: {
     fontSize: 12,
     fontWeight: 800,
