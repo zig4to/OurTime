@@ -1316,7 +1316,10 @@ export const styles = {
     display: "flex",
     flexDirection: "column",
     gap: 10,
-    padding: "26px 16px 0 16px",
+    // Room below as well as above: the footer takes margin-top: auto, which
+    // collapses to nothing on a page taller than the screen, and this section
+    // was left resting against the band.
+    padding: "26px 16px 28px 16px",
   },
   whatsNewToggle: {
     alignSelf: "flex-start",
