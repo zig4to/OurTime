@@ -3283,9 +3283,6 @@ export default function App() {
         <RefreshCw size={13} />
         {refreshingApp ? "Osvežujem …" : "Osveži aplikacijo"}
       </button>
-      <div style={styles.refreshNote}>
-        Če vidiš staro različico. Ime, tema in vnosi ostanejo.
-      </div>
     </div>
   );
   const nameEditRow = editingName && (
