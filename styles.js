@@ -1626,6 +1626,12 @@ export const styles = {
     borderRadius: 10,
     cursor: "pointer",
   },
+  refreshNote: {
+    marginTop: -4,
+    fontSize: 11.5,
+    lineHeight: 1.45,
+    color: "var(--text-muted)",
+  },
   whatsNewList: {
     display: "flex",
     flexDirection: "column",

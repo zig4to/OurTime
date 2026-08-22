@@ -20,6 +20,7 @@ import {
   Link,
   ListChecks,
   Megaphone,
+  RefreshCw,
   Sparkles,
   ArrowLeft,
   CalendarDays,
@@ -1561,6 +1562,7 @@ export default function App() {
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [refreshingApp, setRefreshingApp] = useState(false);
   // Which phone, once asked. Shared by the first-run screen and the footer
   // button, so answering it in one place settles it for the other.
   const [installOs, setInstallOs] = useState(null);
@@ -2250,6 +2252,45 @@ export default function App() {
     setView(next);
     // A new page starts at its own top, not at wherever the last one was left.
     window.scrollTo(0, 0);
+  }
+
+  // What ctrl+F5 does on a desktop, for a phone that has no such key.
+  //
+  // The stale copy is never the service worker's doing -- sw.js has no
+  // fetch handler and caches nothing on purpose -- it is the plain HTTP
+  // cache. GitHub Pages serves these files with max-age=600, so for ten
+  // minutes after a deploy a phone can keep answering from its own copy.
+  //
+  // `cache: "reload"` refetches past that cache and writes the answer back
+  // into it, so the load right after this picks up the new files without
+  // any cache-busting query strings to maintain. The three named below are
+  // every file the app is made of.
+  //
+  // Nothing here touches localStorage. The name, the theme and the install
+  // hint live there and are none of this button's business.
+  async function refreshApp() {
+    setRefreshingApp(true);
+    try {
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      if (navigator.serviceWorker) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        // Updated, not unregistered: unregistering would throw away the
+        // push subscription along with it.
+        await Promise.all(regs.map((r) => r.update().catch(() => {})));
+      }
+      await Promise.all(
+        ["./index.html", "./skupni-koledar.jsx", "./styles.js"].map((url) =>
+          fetch(url, { cache: "reload" }).catch(() => {})
+        )
+      );
+    } catch (e) {
+      // A step that fails leaves the reload no worse than an ordinary one,
+      // which is still what someone pressing this wants.
+    }
+    window.location.reload();
   }
 
   async function dismissInstallHint() {
@@ -3231,6 +3272,20 @@ export default function App() {
           )}
         </div>
       )}
+
+      {/* Not a toggle like the three above it, so no chevron: it acts and
+          the page comes back new. */}
+      <button
+        style={styles.whatsNewToggle}
+        onClick={refreshApp}
+        disabled={refreshingApp}
+      >
+        <RefreshCw size={13} />
+        {refreshingApp ? "Osvežujem …" : "Osveži aplikacijo"}
+      </button>
+      <div style={styles.refreshNote}>
+        Če vidiš staro različico. Ime, tema in vnosi ostanejo.
+      </div>
     </div>
   );
   const nameEditRow = editingName && (
