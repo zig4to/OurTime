@@ -827,6 +827,63 @@ const AUTO_ADVANCE_MS = 6000;
 // with the transition briefly disabled -- visually a no-op. Real event 0
 // therefore lives at slot CARDS_IN_VIEW, not slot 0, which is why `base` shows
 // up everywhere below instead of a plain 0.
+// How long a tapped chip keeps its name up. Long enough to read, short
+// enough that you do not have to dismiss it.
+const NAME_POPUP_MS = 3000;
+
+// A person's initials, which say who only if you already know the initials.
+// Hovering (desktop) or tapping (phone) spells the name out.
+//
+// A span rather than a button on purpose: the day-row chips sit inside the
+// button that opens the day, and a button inside a button is invalid markup
+// that browsers quietly rearrange. stopPropagation is what keeps the tap
+// from opening the day as well.
+function PersonChip({ name, color, style, self }) {
+  const [shown, setShown] = useState(false);
+  const hideRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(hideRef.current), []);
+
+  // Always on a timer, hover included. A chip can slide under a resting
+  // cursor when the row it is in re-lays out -- withdrawing from an event
+  // shifts everyone left -- and a hover that only ends on mouseleave then
+  // has nothing to end it.
+  function reveal() {
+    clearTimeout(hideRef.current);
+    setShown(true);
+    hideRef.current = setTimeout(() => setShown(false), NAME_POPUP_MS);
+  }
+
+  // Your own chip stays inert. On an event it is the control that withdraws
+  // you, and one tap cannot mean both "who is this" and "I am not coming" --
+  // and you are the one person whose initials you already recognise.
+  if (self) {
+    return <span style={{ ...styles.avatarChip(color), ...style }}>{initials(name)}</span>;
+  }
+
+  return (
+    <span style={styles.personChipWrap}>
+      <span
+        style={{ ...styles.avatarChip(color), ...style }}
+        onClick={(e) => {
+          // Or the tap would also reach the button that opens the day.
+          e.stopPropagation();
+          reveal();
+        }}
+        onMouseEnter={reveal}
+        onMouseLeave={() => {
+          clearTimeout(hideRef.current);
+          setShown(false);
+        }}
+        aria-label={name}
+      >
+        {initials(name)}
+      </span>
+      {shown && <span style={styles.personChipName}>{name}</span>}
+    </span>
+  );
+}
+
 function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
   const count = events.length;
   const canSlide = count > CARDS_IN_VIEW;
@@ -2588,9 +2645,11 @@ export default function App() {
               <div style={styles.commentsList}>
                 {comments.map((c) => (
                   <div key={c.id} style={styles.commentRow}>
-                    <span style={styles.avatarChip(personColors[c.author] || GREEN)}>
-                      {initials(c.author)}
-                    </span>
+                    <PersonChip
+                      name={c.author}
+                      color={personColors[c.author] || GREEN}
+                      self={c.author === name}
+                    />
                     <div style={styles.commentBody}>
                       <div style={styles.commentAuthor}>{c.author}</div>
                       <div style={styles.commentText}>{c.text}</div>
@@ -2824,12 +2883,12 @@ export default function App() {
                         {initials(n)}
                       </button>
                     ) : (
-                      <span
+                      <PersonChip
                         key={n}
-                        style={{ ...styles.avatarChip(personColors[n] || GREEN), ...anim }}
-                      >
-                        {initials(n)}
-                      </span>
+                        name={n}
+                        color={personColors[n] || GREEN}
+                        style={anim}
+                      />
                     );
                   })}
                 </div>
@@ -2943,9 +3002,12 @@ export default function App() {
                     <div style={styles.eventAttendees}>
                       <span style={styles.attendeesLabel}>Prišli:</span>
                       {event.attendees.map((n) => (
-                        <span key={n} style={styles.avatarChip(personColors[n] || GREEN)}>
-                          {initials(n)}
-                        </span>
+                        <PersonChip
+                          key={n}
+                          name={n}
+                          color={personColors[n] || GREEN}
+                          self={n === name}
+                        />
                       ))}
                     </div>
                   )}
@@ -3369,9 +3431,7 @@ export default function App() {
                   ) : (
                     <>
                       {dayChips.slice(0, DAY_CHIPS_SHOWN).map(([n, color]) => (
-                        <span key={n} style={styles.avatarChip(color)}>
-                          {initials(n)}
-                        </span>
+                        <PersonChip key={n} name={n} color={color} self={n === name} />
                       ))}
                       {hiddenChips > 0 && (
                         <span

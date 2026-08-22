@@ -611,6 +611,33 @@ export const styles = {
     fontStyle: "italic",
   },
   avatarChip: avatarChipStyle,
+  personChipWrap: {
+    position: "relative",
+    display: "inline-flex",
+    flexShrink: 0,
+  },
+  // Beside the chip rather than above it. The cards these sit in clip
+  // their own overflow to keep their rounded corners, and a bubble above a
+  // chip in a collapsed day row is taller than the room left over it -- it
+  // came out with its top sliced off. There is always width to the right.
+  //
+  // pointer-events: none so it can never swallow a tap meant for whatever
+  // it happens to be covering.
+  personChipName: {
+    position: "absolute",
+    left: "calc(100% + 6px)",
+    top: "50%",
+    transform: "translateY(-50%)",
+    zIndex: 30,
+    padding: "4px 8px",
+    borderRadius: 8,
+    fontSize: 11.5,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+    color: "var(--card-bg)",
+    background: "var(--text-heading)",
+    pointerEvents: "none",
+  },
   // The overflow count in a day row. Same circle as a person's chip so the
   // group still reads as one run, but neutral: it stands for a number, and any
   // of the status colors would claim those people are free, partly free or
