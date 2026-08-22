@@ -635,7 +635,7 @@ export const styles = {
     fontWeight: 700,
     whiteSpace: "nowrap",
     color: "var(--card-bg)",
-    background: "var(--text-heading)",
+    background: "var(--tooltip-bg)",
     pointerEvents: "none",
   },
   // The overflow count in a day row. Same circle as a person's chip so the

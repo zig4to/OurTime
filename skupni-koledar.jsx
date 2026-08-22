@@ -37,6 +37,12 @@ const THEME_CSS = `
     --input-bg: #FDFCFA;
     --text: #233029;
     --text-heading: #1B2E24;
+    /* --text-heading, held back from opaque. The name bubble covers the
+       chips beside the one it belongs to, and letting a little of them
+       through says it is passing rather than part of the row. Spelled out
+       as rgba rather than mixed from the token above, so nothing depends
+       on how well a browser handles colour functions. */
+    --tooltip-bg: rgba(27, 46, 36, 0.86);
     --text-strong: #374840;
     --text-secondary: #5B6862;
     --text-muted: #8A9A91;
@@ -63,6 +69,7 @@ const THEME_CSS = `
     --input-bg: #191F1D;
     --text: #E7EBE6;
     --text-heading: #F4F6F2;
+    --tooltip-bg: rgba(244, 246, 242, 0.88);
     --text-strong: #D6DDD6;
     --text-secondary: #A6B0A9;
     --text-muted: #8A968E;
