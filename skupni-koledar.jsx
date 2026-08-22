@@ -10,6 +10,9 @@ import {
   Menu,
   Archive,
   Chrome,
+  Compass,
+  Share,
+  SquarePlus,
   MoreVertical,
   Download,
   Smartphone,
@@ -1390,54 +1393,131 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
   );
 }
 
+// Neither platform's mark is in lucide -- its "Apple" is the fruit -- and a
+// generic phone glyph twice over would make the two buttons a coin toss. Both
+// are single filled paths inheriting currentColor.
+function AndroidMark({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M17.6 9.48l1.84-3.18a.4.4 0 0 0-.7-.4l-1.87 3.23a11.4 11.4 0 0 0-8.74 0L6.26 5.9a.4.4 0 1 0-.7.4L7.4 9.48A10.8 10.8 0 0 0 2 18h20a10.8 10.8 0 0 0-5.4-8.52M7 15.25a1 1 0 1 1 0-2 1 1 0 0 1 0 2m10 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2" />
+    </svg>
+  );
+}
+
+function AppleMark({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M17.05 12.54c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.62-1.7-3.18-1.72-1.35-.14-2.64.8-3.33.8-.69 0-1.75-.78-2.87-.76-1.48.02-2.84.86-3.6 2.18-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.25 2.74 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.08 2.65-2.14.84-1.23 1.18-2.42 1.2-2.48-.03-.01-2.3-.88-2.32-3.5M14.9 5.7c.6-.74 1.01-1.76.9-2.78-.87.04-1.93.58-2.56 1.31-.56.65-1.05 1.7-.92 2.7.97.08 1.96-.5 2.58-1.23" />
+    </svg>
+  );
+}
+
 // How to get the calendar onto a home screen. Written once and shown in two
 // places -- full screen on a device that has never seen it, and behind a
 // button in the footer for anyone who dismissed it and later wants it back.
-const INSTALL_STEPS = [
-  {
-    Icon: Chrome,
-    title: "Odpri v Chromu",
-    detail:
-      "Povezavo do koledarja prilepi v Chrome. V drugih brskalnikih namestitev pogosto ni na voljo.",
-  },
-  {
-    Icon: MoreVertical,
-    title: "Tapni tri pike",
-    detail: "Zgoraj desno v Chromu.",
-  },
-  {
-    Icon: Download,
-    title: "Izberi Namesti in ustvari bližnjico",
-    detail: "V meniju, ki se odpre.",
-  },
-  {
-    Icon: Smartphone,
-    title: "Izberi Namesti aplikacijo",
-    detail: "Če te možnosti ni, izberi Namesti bližnjico.",
-  },
-];
+//
+// Split by platform because the two have nothing in common past the first
+// tap: Android installs a real app from Chrome's own menu, iOS bookmarks a
+// page from the share sheet, and only Safari offers it at all.
+const INSTALL_STEPS = {
+  android: [
+    {
+      Icon: Chrome,
+      title: "Odpri v Chromu",
+      detail:
+        "Povezavo do koledarja prilepi v Chrome. V drugih brskalnikih namestitev pogosto ni na voljo.",
+    },
+    {
+      Icon: MoreVertical,
+      title: "Tapni tri pike",
+      detail: "Zgoraj desno v Chromu.",
+    },
+    {
+      Icon: Download,
+      title: "Izberi Namesti in ustvari bližnjico",
+      detail: "V meniju, ki se odpre.",
+    },
+    {
+      Icon: Smartphone,
+      title: "Izberi Namesti aplikacijo",
+      detail: "Če te možnosti ni, izberi Namesti bližnjico.",
+    },
+  ],
+  ios: [
+    {
+      Icon: Compass,
+      title: "Odpri v Safariju",
+      detail:
+        "Povezavo do koledarja prilepi v Safari. Na iPhonu se da dodati na zaslon samo od tam.",
+    },
+    {
+      Icon: Share,
+      title: "Tapni gumb za deljenje",
+      detail: "Kvadratek s puščico navzgor, na sredini spodnje vrstice.",
+    },
+    {
+      Icon: SquarePlus,
+      title: "Izberi Dodaj na začetni zaslon",
+      detail: "Je nižje na seznamu – podrsaj navzdol, če je ne vidiš takoj.",
+    },
+    {
+      Icon: Check,
+      title: "Tapni Dodaj",
+      detail: "Zgoraj desno. Ikona pristane na zaslonu kot vsaka druga.",
+    },
+  ],
+};
+
+const OS_LABELS = { android: "Android", ios: "iPhone" };
 
 const INSTALL_LEAD =
   "Nameščena se odpre čez cel zaslon, brez naslovne vrstice brskalnika, in je precej prijetnejša za uporabo.";
 
-function InstallSteps() {
-  return (
-    <div style={styles.installSteps}>
-      {INSTALL_STEPS.map(({ Icon, title, detail }, i) => (
-        <div key={title} style={styles.installStep}>
-          <span style={styles.installStepIcon}>
-            <Icon size={18} />
-          </span>
-          <div style={styles.installStepBody}>
-            <div style={styles.installStepTitle}>
-              <span style={styles.installStepNum}>{i + 1}</span>
-              {title}
-            </div>
-            <div style={styles.installStepDetail}>{detail}</div>
-          </div>
+// The steps for one platform, or the question that picks one. Both places
+// that show this hold the answer in the same piece of state, so choosing on
+// the first-run screen carries over to the footer button.
+function InstallGuide({ os, onPick }) {
+  if (!os) {
+    return (
+      <div>
+        <div style={styles.installQuestion}>Kateri telefon imaš?</div>
+        <div style={styles.installChoiceRow}>
+          {[
+            ["android", AndroidMark],
+            ["ios", AppleMark],
+          ].map(([key, Mark]) => (
+            <button key={key} style={styles.installChoice} onClick={() => onPick(key)}>
+              <Mark />
+              {OS_LABELS[key]}
+            </button>
+          ))}
         </div>
-      ))}
-    </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <button style={styles.installBack} onClick={() => onPick(null)}>
+        <ArrowLeft size={12} /> {OS_LABELS[os]} – zamenjaj
+      </button>
+      <div style={styles.installSteps}>
+        {INSTALL_STEPS[os].map(({ Icon, title, detail }, i) => (
+          <div key={title} style={styles.installStep}>
+            <span style={styles.installStepIcon}>
+              <Icon size={18} />
+            </span>
+            <div style={styles.installStepBody}>
+              <div style={styles.installStepTitle}>
+                <span style={styles.installStepNum}>{i + 1}</span>
+                {title}
+              </div>
+              <div style={styles.installStepDetail}>{detail}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -1466,6 +1546,9 @@ export default function App() {
   const [installHintSeen, setInstallHintSeen] = useState(null);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
+  // Which phone, once asked. Shared by the first-run screen and the footer
+  // button, so answering it in one place settles it for the other.
+  const [installOs, setInstallOs] = useState(null);
   // Re-rolled once per load, so the two people a collapsed day shows change
   // from visit to visit rather than the same name always leading. A ref and
   // not state: these rows re-render constantly -- the event strip alone
@@ -2720,7 +2803,7 @@ export default function App() {
           <h1 style={styles.installTitle}>Namesti na domači zaslon</h1>
         </div>
         <p style={styles.installLead}>{INSTALL_LEAD}</p>
-        <InstallSteps />
+        <InstallGuide os={installOs} onPick={setInstallOs} />
         <button style={styles.primaryButton} onClick={dismissInstallHint}>
           <Check size={16} /> Razumem
         </button>
@@ -3065,7 +3148,7 @@ export default function App() {
       {showInstall && (
         <div style={styles.whatsNewDay}>
           <p style={styles.installLead}>{INSTALL_LEAD}</p>
-          <InstallSteps />
+          <InstallGuide os={installOs} onPick={setInstallOs} />
         </div>
       )}
     </div>
