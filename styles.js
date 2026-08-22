@@ -1084,6 +1084,133 @@ export const styles = {
     borderRadius: 9,
     cursor: "pointer",
   },
+  archiveIntro: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 6,
+    padding: "0 20px 16px 20px",
+  },
+  // A way back that does not depend on finding the menu again. The menu
+  // still offers it; this is the one you reach for without thinking.
+  archiveBack: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+    padding: "5px 10px 5px 8px",
+    fontSize: 12.5,
+    fontWeight: 700,
+    color: GREEN,
+    background: GREEN_BG,
+    border: "none",
+    borderRadius: 9,
+    cursor: "pointer",
+  },
+  archiveHeading: {
+    fontSize: 22,
+    fontWeight: 800,
+    color: "var(--text-heading)",
+  },
+  archiveSubheading: {
+    fontSize: 13,
+    color: "var(--text-muted)",
+  },
+  archiveList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    padding: "0 16px",
+  },
+  archiveEmpty: {
+    padding: "18px 4px",
+    fontSize: 13,
+    fontStyle: "italic",
+    color: "var(--text-faint)",
+  },
+  // The event's own colour, but weaker than the card inside a day. These
+  // stack by the dozen down a scrolling list, where the full-strength tint
+  // stops reading as a highlight and starts reading as noise.
+  archiveCard: (hue) => ({
+    borderRadius: 14,
+    overflow: "hidden",
+    background: hue ? `rgba(${hue}, 0.12)` : "var(--card-bg)",
+    border: hue ? `1px solid rgba(${hue}, 0.34)` : "1px solid var(--border)",
+  }),
+  archiveCardHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    width: "100%",
+    padding: 14,
+    textAlign: "left",
+    font: "inherit",
+    color: "inherit",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+  },
+  archiveCardMain: {
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  archiveCardDate: {
+    fontSize: 11.5,
+    fontWeight: 600,
+    color: "var(--text-muted)",
+  },
+  // One line: this is a list you scan, and a wrapped title would break the
+  // rhythm of the dates running down the left.
+  archiveCardTitle: {
+    fontSize: 15,
+    fontWeight: 800,
+    color: "var(--text-heading)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  archiveCardBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    padding: "0 14px 14px 14px",
+  },
+  // Bare spans inside, spaced rather than separated: inline styles do not
+  // reach children for backgrounds, but font size and colour inherit, which
+  // is all these need.
+  archiveSummary: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "4px 14px",
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+  },
+  archiveMoreRow: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 6,
+    padding: "18px 16px 8px 16px",
+  },
+  archiveMore: {
+    padding: "9px 16px",
+    fontSize: 13,
+    fontWeight: 700,
+    color: "var(--text-secondary)",
+    background: "var(--card-bg)",
+    border: "1px solid var(--border)",
+    borderRadius: 10,
+    cursor: "pointer",
+  },
+  archiveRange: {
+    fontSize: 11.5,
+    fontStyle: "italic",
+    color: "var(--text-faint)",
+  },
   eventAttendees: {
     display: "flex",
     flexWrap: "wrap",

@@ -9,6 +9,8 @@ import {
   Settings,
   Menu,
   Archive,
+  ArrowLeft,
+  CalendarDays,
   Sun,
   Moon,
   Plus,
@@ -671,6 +673,23 @@ export function fmtHour(h) {
   return `${String(h % 24).padStart(2, "0")}:00`;
 }
 
+// Slovenian counts in four forms, chosen by n mod 100: one, two, three-or-
+// four, and everything else. 101 takes the singular and 111 does not, which
+// is why the test is on the last two digits rather than the last one.
+export function pluralSl(n, forms) {
+  const rest = n % 100;
+  if (rest === 1) return forms[0];
+  if (rest === 2) return forms[1];
+  if (rest === 3 || rest === 4) return forms[2];
+  return forms[3];
+}
+
+// The archive reaches back past the turn of a year, so unlike the day list
+// it has to say which one.
+export function archiveDateLabel(iso) {
+  return `${weekdayAbbrev(iso)}, ${dayNumber(iso)}. ${monthNumber(iso)}. ${iso.slice(0, 4)}`;
+}
+
 export function entryCountLabel(n) {
   if (n === 0) return "Še nihče ni vnesel";
   if (n === 1) return "1 vnos";
@@ -697,6 +716,11 @@ const CARDS_IN_VIEW = 3;
 // rest into a count. The row is a summary, not a roster -- the full list is
 // one tap away inside the day.
 const DAY_CHIPS_SHOWN = 2;
+
+// How far back one press of "Naloži več" reaches. A bounded slab rather than
+// the whole history: the archive only grows, and a query with no lower bound
+// would eventually read every row the club has ever written.
+const ARCHIVE_SLAB_DAYS = 30;
 
 // Below this the gesture reads as a tap or a stray wobble, not a swipe, and
 // the strip springs back to where it was.
@@ -906,6 +930,19 @@ export default function App() {
   const [theme, setTheme] = useState("light");
   const [showSettings, setShowSettings] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // "calendar" | "archive". Two pages, so a string rather than a router.
+  const [view, setView] = useState("calendar");
+  // Oldest date the archive has reached. The next slab runs from
+  // ARCHIVE_SLAB_DAYS before it up to it; null means nothing loaded yet.
+  const [archiveFrom, setArchiveFrom] = useState(null);
+  // Past days holding at least one event, newest first. Their events and
+  // threads live in dayEvents/dayComments alongside the visible window, so
+  // every piece of event UI already written works on them unchanged.
+  const [archiveIsos, setArchiveIsos] = useState([]);
+  // Which archived event is expanded, as "iso:eventId"; one at a time.
+  const [openArchiveEvent, setOpenArchiveEvent] = useState(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveError, setArchiveError] = useState(null);
   const menuRef = useRef(null);
   const [dayEvents, setDayEvents] = useState({}); // { iso: [{ id, title, description, duration, createdBy, attendees }] }
   const [editingEvent, setEditingEvent] = useState(null); // { iso, id } of the open event form, id null means "new event"; or null
@@ -976,6 +1013,18 @@ export default function App() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [menuOpen]);
+
+  // The archive is a page, so the phone's back button has to leave the
+  // archive rather than leave the app. Every switch pushes an entry and
+  // popstate reads the view back out of it -- an entry with no state at all
+  // is the first load, which is the calendar.
+  useEffect(() => {
+    function onPopState(e) {
+      setView(e.state && e.state.view === "archive" ? "archive" : "calendar");
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   useEffect(() => {
     if (!scrollToDay) return;
@@ -1071,8 +1120,19 @@ export default function App() {
         comments[group] = sortComments(comments[group]);
       }
       setDayData(result);
-      setDayEvents(events);
-      setDayComments(comments);
+      // Merged, not replaced. The archive keeps its events and threads in
+      // these same maps, and refreshing the visible window must not throw
+      // away days the archive is holding. `events` carries a key for every
+      // visible day, so those are still overwritten wholesale.
+      setDayEvents((prev) => ({ ...prev, ...events }));
+      setDayComments((prev) => {
+        const kept = {};
+        for (const [group, list] of Object.entries(prev)) {
+          const iso = group.slice(0, group.indexOf(":"));
+          if (!(iso in result)) kept[group] = list;
+        }
+        return { ...kept, ...comments };
+      });
       setError(null);
     } catch (e) {
       setError("Podatkov ni bilo mogoče naložiti. Poskusi znova.");
@@ -1085,11 +1145,71 @@ export default function App() {
     if (name && days.length) loadAllData();
   }, [name, days, loadAllData]);
 
+  // Reads one slab further back each time. Availability entries are skipped
+  // on purpose -- who was free three weeks ago is not something anyone goes
+  // looking for; what happened is.
+  const loadArchiveSlab = useCallback(async () => {
+    if (!days.length || archiveLoading) return;
+    const upper = archiveFrom || days[0]; // exclusive: today is not archive
+    const lower = addDays(upper, -ARCHIVE_SLAB_DAYS);
+    setArchiveLoading(true);
+    setArchiveError(null);
+    try {
+      const res = await window.storage.range(`avail:${lower}`, `avail:${upper}`, true);
+      const events = {};
+      const comments = {};
+      for (const row of (res && res.rows) || []) {
+        const iso = isoFromKey(row.key);
+        const person = personFromKey(row.key);
+        if (!iso || !person) continue;
+        if (person.startsWith(COMMENT_MARKER)) {
+          const parsed = parseCommentPerson(person);
+          const comment = parsed && decodeComment(row.value, parsed.commentId);
+          if (comment) {
+            const group = commentGroup(iso, parsed.eventId);
+            (comments[group] = comments[group] || []).push(comment);
+          }
+        } else if (person.startsWith(EVENT_MARKER)) {
+          const ev = decodeEvent(row.value, person.slice(EVENT_MARKER.length));
+          if (ev) (events[iso] = events[iso] || []).push(ev);
+        }
+      }
+      for (const iso of Object.keys(events)) {
+        events[iso].sort((a, b) => Number(a.id) - Number(b.id));
+      }
+      for (const group of Object.keys(comments)) {
+        comments[group] = sortComments(comments[group]);
+      }
+      setDayEvents((prev) => ({ ...prev, ...events }));
+      setDayComments((prev) => ({ ...prev, ...comments }));
+      setArchiveIsos((prev) =>
+        [...new Set([...prev, ...Object.keys(events)])].sort().reverse()
+      );
+      setArchiveFrom(lower);
+    } catch (e) {
+      setArchiveError("Arhiva ni bilo mogoče naložiti. Poskusi znova.");
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, [days, archiveFrom, archiveLoading]);
+
+  // First slab on first visit only; after that it is the button's job.
+  useEffect(() => {
+    if (view === "archive" && name && days.length && archiveFrom === null) {
+      loadArchiveSlab();
+    }
+  }, [view, name, days, archiveFrom, loadArchiveSlab]);
+
   // Read inside the change handler rather than closed over, so neither the
   // window moving nor an event changing means tearing the subscription down
   // and building it again. dayEvents is needed there to see what an incoming
   // event changed, which is the only way to tell a new attendee from one who
   // was already on the list.
+  const archiveIsosRef = useRef(archiveIsos);
+  useEffect(() => {
+    archiveIsosRef.current = archiveIsos;
+  }, [archiveIsos]);
+
   const daysRef = useRef(days);
   useEffect(() => {
     daysRef.current = days;
@@ -1117,7 +1237,16 @@ export default function App() {
         onChange: ({ type, key, value }) => {
           const iso = isoFromKey(key);
           const person = personFromKey(key);
-          if (!iso || !person || !daysRef.current.includes(iso)) return;
+          // Past days count too, once the archive has loaded them: a comment
+          // written under last week's outing has to reach whoever else is
+          // reading it, exactly as one written under today does.
+          if (
+            !iso ||
+            !person ||
+            (!daysRef.current.includes(iso) && !archiveIsosRef.current.includes(iso))
+          ) {
+            return;
+          }
 
           if (person.startsWith(COMMENT_MARKER)) {
             const parsed = parseCommentPerson(person);
@@ -1261,6 +1390,15 @@ export default function App() {
       setError("Ime se ni shranilo za naslednjič (a lahko nadaljuješ zdaj).");
     }
     if (previous && previous !== full) await migrateEntries(previous, full);
+  }
+
+  function goTo(next) {
+    setMenuOpen(false);
+    if (next === view) return;
+    window.history.pushState({ view: next }, "");
+    setView(next);
+    // A new page starts at its own top, not at wherever the last one was left.
+    window.scrollTo(0, 0);
   }
 
   function toggleEditingName() {
@@ -1762,14 +1900,36 @@ export default function App() {
   const isAdmin = name?.trim().toLowerCase() === ADMIN_NAME;
 
   // Soonest event leftmost, running further into the future to the right.
-  const recentEvents = eventsNearestFirst(dayEvents);
+  // Narrowed to the visible window first. dayEvents now also holds whatever
+  // the archive has loaded, and handing the whole map to eventsNearestFirst
+  // put last month's outings in "Aktualni dogodki" the moment anyone opened
+  // the archive.
+  const upcomingEvents = {};
+  for (const iso of days) {
+    if (dayEvents[iso]) upcomingEvents[iso] = dayEvents[iso];
+  }
+  const recentEvents = eventsNearestFirst(upcomingEvents);
+
+  // Everything the archive has loaded, newest day first. archiveIsos is
+  // already sorted that way; within a day the events keep their creation
+  // order, which is the order they had on the day itself.
+  const archiveEntries = archiveIsos.flatMap((iso) =>
+    (dayEvents[iso] || []).map((event) => ({ iso, event }))
+  );
 
   // One color per event, assigned across the whole list and then looked up by
   // storage key, so an event's card in the strip and its card inside the day
-  // are the same color rather than two independent guesses.
+  // are the same color rather than two independent guesses. Archived events
+  // join the same assignment, or an event would change colour on its way into
+  // the archive -- and the upcoming ones are listed first so their colours do
+  // not shift as older ones load in behind them.
+  const colorableEvents = [
+    ...recentEvents,
+    ...archiveEntries.map(({ iso, event }) => ({ ...event, _iso: iso })),
+  ];
   const eventHues = {};
-  assignEventColors(recentEvents).forEach((hue, i) => {
-    eventHues[eventKey(recentEvents[i]._iso, recentEvents[i].id)] = hue;
+  assignEventColors(colorableEvents).forEach((hue, i) => {
+    eventHues[eventKey(colorableEvents[i]._iso, colorableEvents[i].id)] = hue;
   });
 
   // Assigned across everyone in the whole visible window, not per day, so a
@@ -1834,9 +1994,21 @@ export default function App() {
             <Pencil size={13} style={styles.menuProfilePencil} />
           </button>
           <div style={styles.menuDivider} />
-          <button style={styles.menuItem(true)} disabled>
+          <button
+            style={styles.menuItem(view === "calendar")}
+            disabled={view === "calendar"}
+            onClick={() => goTo("calendar")}
+          >
+            <CalendarDays size={14} /> Koledar
+            {view === "calendar" && <span style={styles.menuItemNote}>tu si</span>}
+          </button>
+          <button
+            style={styles.menuItem(view === "archive")}
+            disabled={view === "archive"}
+            onClick={() => goTo("archive")}
+          >
             <Archive size={14} /> Arhiv
-            <span style={styles.menuItemNote}>kmalu</span>
+            {view === "archive" && <span style={styles.menuItemNote}>tu si</span>}
           </button>
           <button
             style={styles.menuItem(false)}
@@ -1850,6 +2022,22 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+
+  // The one bar every signed-in page wears. It was written out twice --
+  // identically -- in the two layout branches, and a third page would have
+  // made it three copies of the same greeting.
+  const appHeader = (
+    <header style={styles.header}>
+      <div>
+        <div style={styles.eyebrow}>Garaža Klub Koledar</div>
+        <h1 style={styles.headerTitle}>
+          Živjo <span style={styles.headerAccent}>{capitalize(name.split(" ")[0])}</span>,
+          kdaj maš cajt?
+        </h1>
+      </div>
+      {headerActions}
+    </header>
   );
 
   const nameEditRow = editingName && (
@@ -2020,6 +2208,88 @@ export default function App() {
     </div>
   );
 
+  // The thread under an event, wherever that event is drawn. The archive
+  // shows the same events the calendar does, so the comments had to stop
+  // being markup buried inside the day view and become something both pages
+  // can call.
+  function renderCommentThread(iso, eventId) {
+    const key = commentGroup(iso, eventId);
+    const comments = dayComments[key] || [];
+    const open = openComments === key;
+    const draft = commentDrafts[key] || "";
+    return (
+      <div style={styles.commentsBlock}>
+        <button
+          style={styles.commentsToggle}
+          onClick={() => setOpenComments(open ? null : key)}
+          aria-expanded={open}
+        >
+          <MessageSquare size={12} />
+          {comments.length > 0 ? `Komentarji (${comments.length})` : "Komentiraj"}
+          <ChevronRight
+            size={14}
+            style={{
+              transform: open ? "rotate(90deg)" : "none",
+              transition: "transform 150ms ease",
+            }}
+          />
+        </button>
+        {open && (
+          <div style={styles.commentsPanel}>
+            {comments.length === 0 ? (
+              <div style={styles.commentsEmpty}>Še ni komentarjev.</div>
+            ) : (
+              <div style={styles.commentsList}>
+                {comments.map((c) => (
+                  <div key={c.id} style={styles.commentRow}>
+                    <span style={styles.avatarChip(personColors[c.author] || GREEN)}>
+                      {initials(c.author)}
+                    </span>
+                    <div style={styles.commentBody}>
+                      <div style={styles.commentAuthor}>{c.author}</div>
+                      <div style={styles.commentText}>{c.text}</div>
+                    </div>
+                    {c.author === name && (
+                      <button
+                        style={styles.commentDelete}
+                        onClick={() => deleteComment(iso, eventId, c.id)}
+                        aria-label="Izbriši komentar"
+                        title="Izbriši komentar"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={styles.commentForm}>
+              <input
+                style={styles.commentInput}
+                placeholder="Napiši komentar"
+                value={draft}
+                onChange={(e) =>
+                  setCommentDrafts((prev) => ({ ...prev, [key]: e.target.value }))
+                }
+                onKeyDown={(e) => e.key === "Enter" && postComment(iso, eventId)}
+              />
+              <button
+                style={{
+                  ...styles.commentSubmit,
+                  opacity: draft.trim() ? 1 : 0.5,
+                }}
+                disabled={!draft.trim()}
+                onClick={() => postComment(iso, eventId)}
+              >
+                Objavi
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Shared between the mobile and desktop day-detail views: the day's group
   // events (a day can have several, oldest first) plus whichever one is
   // being created or edited. Only an event's creator can edit or delete it;
@@ -2133,10 +2403,6 @@ export default function App() {
           // rejoined before their own exit finished -- they are a real
           // attendee again, and rendering both copies would collide on key.
           const ghosts = ghostChips[eventChipGroup(iso, event.id)] || [];
-          const commentsKey = commentGroup(iso, event.id);
-          const comments = dayComments[commentsKey] || [];
-          const commentsOpen = openComments === commentsKey;
-          const commentDraft = commentDrafts[commentsKey] || "";
           const shownAttendees = ghosts.length
             ? [...event.attendees, ...ghosts.filter((n) => !event.attendees.includes(n))]
             : event.attendees;
@@ -2222,84 +2488,7 @@ export default function App() {
                   })}
                 </div>
               )}
-              <div style={styles.commentsBlock}>
-                <button
-                  style={styles.commentsToggle}
-                  onClick={() => setOpenComments(commentsOpen ? null : commentsKey)}
-                  aria-expanded={commentsOpen}
-                >
-                  <MessageSquare size={12} />
-                  {comments.length > 0
-                    ? `Komentarji (${comments.length})`
-                    : "Komentiraj"}
-                  <ChevronRight
-                    size={14}
-                    style={{
-                      transform: commentsOpen ? "rotate(90deg)" : "none",
-                      transition: "transform 150ms ease",
-                    }}
-                  />
-                </button>
-                {commentsOpen && (
-                  <div style={styles.commentsPanel}>
-                    {comments.length === 0 ? (
-                      <div style={styles.commentsEmpty}>Še ni komentarjev.</div>
-                    ) : (
-                      <div style={styles.commentsList}>
-                        {comments.map((c) => (
-                          <div key={c.id} style={styles.commentRow}>
-                            <span
-                              style={styles.avatarChip(personColors[c.author] || GREEN)}
-                            >
-                              {initials(c.author)}
-                            </span>
-                            <div style={styles.commentBody}>
-                              <div style={styles.commentAuthor}>{c.author}</div>
-                              <div style={styles.commentText}>{c.text}</div>
-                            </div>
-                            {c.author === name && (
-                              <button
-                                style={styles.commentDelete}
-                                onClick={() => deleteComment(iso, event.id, c.id)}
-                                aria-label="Izbriši komentar"
-                                title="Izbriši komentar"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div style={styles.commentForm}>
-                      <input
-                        style={styles.commentInput}
-                        placeholder="Napiši komentar"
-                        value={commentDraft}
-                        onChange={(e) =>
-                          setCommentDrafts((prev) => ({
-                            ...prev,
-                            [commentsKey]: e.target.value,
-                          }))
-                        }
-                        onKeyDown={(e) =>
-                          e.key === "Enter" && postComment(iso, event.id)
-                        }
-                      />
-                      <button
-                        style={{
-                          ...styles.commentSubmit,
-                          opacity: commentDraft.trim() ? 1 : 0.5,
-                        }}
-                        disabled={!commentDraft.trim()}
-                        onClick={() => postComment(iso, event.id)}
-                      >
-                        Objavi
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              {renderCommentThread(iso, event.id)}
             </div>
           );
         })}
@@ -2316,6 +2505,134 @@ export default function App() {
     );
   }
 
+  const archivePage = (
+    <>
+      <div style={styles.archiveIntro}>
+        <button style={styles.archiveBack} onClick={() => goTo("calendar")}>
+          <ArrowLeft size={14} /> Koledar
+        </button>
+        <div style={styles.archiveHeading}>Arhiv</div>
+        <div style={styles.archiveSubheading}>Kaj je že bilo.</div>
+      </div>
+
+      {archiveError && <div style={styles.errorBanner}>{archiveError}</div>}
+
+      <div style={styles.archiveList}>
+        {archiveEntries.length === 0 && !archiveLoading && (
+          <div style={styles.archiveEmpty}>
+            {archiveFrom ? "V tem obdobju ni bilo dogodkov." : "Nalagam …"}
+          </div>
+        )}
+        {archiveEntries.map(({ iso, event }) => {
+          const cardKey = `${iso}:${event.id}`;
+          const open = openArchiveEvent === cardKey;
+          const comments = dayComments[commentGroup(iso, event.id)] || [];
+          const going = event.attendees.length;
+          return (
+            <div key={cardKey} style={styles.archiveCard(eventHues[eventKey(iso, event.id)])}>
+              <button
+                style={styles.archiveCardHead}
+                onClick={() => setOpenArchiveEvent(open ? null : cardKey)}
+                aria-expanded={open}
+              >
+                <div style={styles.archiveCardMain}>
+                  <div style={styles.archiveCardDate}>{archiveDateLabel(iso)}</div>
+                  <div style={styles.archiveCardTitle}>{event.title}</div>
+                </div>
+                <ChevronRight
+                  size={18}
+                  color="var(--text-faint)"
+                  style={{
+                    flexShrink: 0,
+                    transform: open ? "rotate(90deg)" : "none",
+                    transition: "transform 150ms ease",
+                  }}
+                />
+              </button>
+
+              {open && (
+                <div style={styles.archiveCardBody}>
+                  <div style={styles.archiveSummary}>
+                    {event.duration && <span>{event.duration}</span>}
+                    <span>
+                      {going}{" "}
+                      {pluralSl(going, [
+                        "udeleženec",
+                        "udeleženca",
+                        "udeleženci",
+                        "udeležencev",
+                      ])}
+                    </span>
+                    <span>
+                      {comments.length}{" "}
+                      {pluralSl(comments.length, [
+                        "komentar",
+                        "komentarja",
+                        "komentarji",
+                        "komentarjev",
+                      ])}
+                    </span>
+                    {event.keyword && <span>{event.keyword}</span>}
+                  </div>
+
+                  {event.description && (
+                    <p style={styles.eventDescription}>{event.description}</p>
+                  )}
+
+                  {event.attendees.length > 0 && (
+                    <div style={styles.eventAttendees}>
+                      <span style={styles.attendeesLabel}>Prišli:</span>
+                      {event.attendees.map((n) => (
+                        <span key={n} style={styles.avatarChip(personColors[n] || GREEN)}>
+                          {initials(n)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {renderCommentThread(iso, event.id)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={styles.archiveMoreRow}>
+        <button
+          style={{ ...styles.archiveMore, opacity: archiveLoading ? 0.5 : 1 }}
+          disabled={archiveLoading}
+          onClick={loadArchiveSlab}
+        >
+          {archiveLoading ? "Nalagam …" : "Naloži še en mesec"}
+        </button>
+        {archiveFrom && (
+          <div style={styles.archiveRange}>
+            naloženo do {archiveDateLabel(archiveFrom)}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  if (view === "archive") {
+    // The same shell the calendar uses, so the navbar sits identically on
+    // both pages and the desktop width limit does not stop at the boundary
+    // between them.
+    const shell = (
+      <>
+        {appHeader}
+        {archivePage}
+      </>
+    );
+    return (
+      <div style={isDesktop ? styles.pageDesktop : styles.page}>
+        {isDesktop ? <div style={styles.desktopContainer}>{shell}</div> : shell}
+        {settingsModal}
+      </div>
+    );
+  }
+
   if (isDesktop) {
     const iso = openDay || today || null;
     const selectedIso = days.includes(iso) ? iso : today;
@@ -2328,17 +2645,7 @@ export default function App() {
     return (
       <div style={styles.pageDesktop}>
         <div style={styles.desktopContainer}>
-          <header style={styles.header}>
-            <div>
-              <div style={styles.eyebrow}>Garaža Klub Koledar</div>
-              <h1 style={styles.headerTitle}>
-                Živjo{" "}
-                <span style={styles.headerAccent}>{capitalize(name.split(" ")[0])}</span>,
-                kdaj maš cajt?
-              </h1>
-            </div>
-            {headerActions}
-          </header>
+          {appHeader}
 
           {/* Above the event strip, not below it: the form belongs to the
               greeting the pencil sits in, and opening it under a strip that is
@@ -2635,16 +2942,7 @@ export default function App() {
 
   return (
     <div style={styles.page}>
-      <header style={styles.header}>
-        <div>
-          <div style={styles.eyebrow}>Garaža Klub Koledar</div>
-          <h1 style={styles.headerTitle}>
-            Živjo <span style={styles.headerAccent}>{capitalize(name.split(" ")[0])}</span>,
-            kdaj maš cajt?
-          </h1>
-        </div>
-        {headerActions}
-      </header>
+      {appHeader}
 
       {/* Above the event strip, not below it: the form belongs to the
           greeting the pencil sits in, and opening it under a strip that is
