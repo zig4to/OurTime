@@ -983,6 +983,24 @@ export const styles = {
     color: "var(--text-secondary)",
     marginTop: 2,
   },
+  // Only rendered when an event actually carries a link, so it can look
+  // like a thing to press rather than like a field that happens to be
+  // empty.
+  eventLink: {
+    alignSelf: "flex-start",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 12px",
+    fontSize: 12.5,
+    fontWeight: 700,
+    color: GREEN,
+    background: "var(--card-bg)",
+    border: `1px solid ${GREEN}`,
+    borderRadius: 9,
+    textDecoration: "none",
+    cursor: "pointer",
+  },
   eventDescription: {
     fontSize: 13,
     color: "var(--text-strong)",

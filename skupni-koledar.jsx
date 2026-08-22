@@ -9,6 +9,7 @@ import {
   Settings,
   Menu,
   Archive,
+  Link,
   Sparkles,
   ArrowLeft,
   CalendarDays,
@@ -374,6 +375,24 @@ export function encodeEvent(ev) {
   return JSON.stringify(ev);
 }
 
+// What someone types into a link field is a URL only by intention. A bare
+// "example.com" is a relative path as far as the browser is concerned, and a
+// "javascript:" one is a script waiting for somebody to press it -- which
+// matters here, because anyone holding the link to this calendar can create
+// an event. So: fill in a missing scheme, and let nothing but http and https
+// through.
+export function safeEventLink(raw) {
+  const text = (raw || "").trim();
+  if (!text) return "";
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`;
+  try {
+    const url = new URL(withScheme);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
+  } catch (e) {
+    return "";
+  }
+}
+
 export function decodeEvent(raw, id) {
   try {
     const parsed = JSON.parse(raw);
@@ -382,6 +401,7 @@ export function decodeEvent(raw, id) {
       title: parsed.title || "",
       description: parsed.description || "",
       keyword: parsed.keyword || "",
+      link: parsed.link || "",
       duration: parsed.duration || "",
       createdBy: parsed.createdBy || "",
       attendees: Array.isArray(parsed.attendees) ? parsed.attendees : [],
@@ -1383,6 +1403,8 @@ export default function App() {
   const [eventDescDraft, setEventDescDraft] = useState("");
   const [showEventDescInput, setShowEventDescInput] = useState(false);
   const [eventKeywordDraft, setEventKeywordDraft] = useState("");
+  const [eventLinkDraft, setEventLinkDraft] = useState("");
+  const [showEventLinkInput, setShowEventLinkInput] = useState(false);
   const [eventStartDraft, setEventStartDraft] = useState("");
   const [eventEndDraft, setEventEndDraft] = useState("");
   // Attendee chips currently playing an animation: chip id -> "in" | "out".
@@ -2164,6 +2186,8 @@ export default function App() {
     setEventDescDraft(existing?.description || "");
     setShowEventDescInput(!!existing?.description);
     setEventKeywordDraft(existing?.keyword || "");
+    setEventLinkDraft(existing?.link || "");
+    setShowEventLinkInput(!!existing?.link);
     const { start, end } = splitDuration(existing?.duration || "");
     setEventStartDraft(start);
     setEventEndDraft(end);
@@ -2176,6 +2200,8 @@ export default function App() {
     setEventDescDraft("");
     setShowEventDescInput(false);
     setEventKeywordDraft("");
+    setEventLinkDraft("");
+    setShowEventLinkInput(false);
     setEventStartDraft("");
     setEventEndDraft("");
   }
@@ -2194,6 +2220,9 @@ export default function App() {
       title,
       description: eventDescDraft.trim(),
       keyword: eventKeywordDraft.trim(),
+      // Normalised on the way in, so every reader downstream gets either a
+      // usable http(s) address or nothing at all.
+      link: safeEventLink(eventLinkDraft),
       duration,
       createdBy: existing?.createdBy || name,
       attendees: existing?.attendees || [],
@@ -3333,6 +3362,34 @@ export default function App() {
               <MessageSquare size={12} /> Dodaj opis
             </button>
           )}
+          {showEventLinkInput ? (
+            <div style={styles.noteBlock}>
+              <input
+                style={styles.input}
+                type="url"
+                inputMode="url"
+                placeholder="Povezava (https://…)"
+                value={eventLinkDraft}
+                onChange={(e) => setEventLinkDraft(e.target.value)}
+              />
+              <button
+                style={styles.noteRemoveButton}
+                onClick={() => {
+                  setEventLinkDraft("");
+                  setShowEventLinkInput(false);
+                }}
+              >
+                Odstrani povezavo
+              </button>
+            </div>
+          ) : (
+            <button
+              style={styles.addNoteButton}
+              onClick={() => setShowEventLinkInput(true)}
+            >
+              <Link size={12} /> Dodaj povezavo
+            </button>
+          )}
           <input
             style={styles.input}
             placeholder="Ključna beseda"
@@ -3421,6 +3478,18 @@ export default function App() {
               </div>
               {event.description && (
                 <p style={styles.eventDescription}>{event.description}</p>
+              )}
+              {event.link && (
+                <a
+                  style={styles.eventLink}
+                  href={event.link}
+                  target="_blank"
+                  // noreferrer as well as noopener: the opened page has no business
+                  // knowing which calendar sent it, and anyone can add an event here.
+                  rel="noopener noreferrer"
+                >
+                  <Link size={12} /> Povezava
+                </a>
               )}
               {/* Confirming removes this row rather than switching it to a
                   "you're going" state: once you're on the list your own chip
@@ -3570,6 +3639,18 @@ export default function App() {
 
                   {event.description && (
                     <p style={styles.eventDescription}>{event.description}</p>
+                  )}
+                  {event.link && (
+                    <a
+                      style={styles.eventLink}
+                      href={event.link}
+                      target="_blank"
+                      // noreferrer as well as noopener: the opened page has no business
+                      // knowing which calendar sent it, and anyone can add an event here.
+                      rel="noopener noreferrer"
+                    >
+                      <Link size={12} /> Povezava
+                    </a>
                   )}
 
                   {event.attendees.length > 0 && (
