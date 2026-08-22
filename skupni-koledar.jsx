@@ -3889,9 +3889,9 @@ export default function App() {
           </div>
 
           {whatsNewSection}
-
-          {appFooter}
         </div>
+
+        {appFooter}
 
         {viewPersonModal}
         {settingsModal}

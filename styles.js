@@ -88,11 +88,15 @@ const eventCardLabel = {
 export const styles = {
   page: {
     minHeight: "100vh",
+    // A column so the footer can be pushed to the bottom of a short page,
+    // and no bottom padding: that padding was page background sitting under
+    // the footer, which is exactly the gap a footer is supposed to close.
+    display: "flex",
+    flexDirection: "column",
     background: "var(--bg)",
     fontFamily:
       "'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
     color: "var(--text)",
-    paddingBottom: 40,
   },
   centerScreen: {
     minHeight: "100vh",
@@ -1686,7 +1690,10 @@ export const styles = {
     flexDirection: "column",
     alignItems: "center",
     gap: 8,
-    marginTop: 32,
+    // auto rather than a fixed margin: on a page taller than the screen it
+    // collapses to nothing and the band simply follows the content, and on
+    // a short one it absorbs the slack so nothing shows underneath.
+    marginTop: "auto",
     padding: "22px 20px 26px 20px",
     background: "var(--card-bg)",
     borderTop: "1px solid var(--border)",
@@ -1738,14 +1745,19 @@ export const styles = {
   }),
   pageDesktop: {
     minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
     background: "var(--bg)",
     fontFamily:
       "'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
     color: "var(--text)",
-    paddingBottom: 40,
   },
   desktopContainer: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
     maxWidth: 980,
+    width: "100%",
     margin: "0 auto",
     padding: "0 8px",
   },
