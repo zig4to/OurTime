@@ -1016,6 +1016,19 @@ export const styles = {
   // object-fit: cover with the position pinned right means a photo of any
   // shape fills the wedge and is cropped rather than squashed, and never
   // reaches past it.
+  eventImageRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  eventImagePreview: {
+    flexShrink: 0,
+    width: 56,
+    height: 56,
+    objectFit: "cover",
+    borderRadius: 10,
+    display: "block",
+  },
   eventCardImage: {
     position: "absolute",
     inset: 0,

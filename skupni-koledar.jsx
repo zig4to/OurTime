@@ -10,7 +10,6 @@ import {
   Menu,
   Archive,
   Link,
-  Image as ImageIcon,
   Sparkles,
   ArrowLeft,
   CalendarDays,
@@ -392,6 +391,15 @@ export function safeEventLink(raw) {
   } catch (e) {
     return "";
   }
+}
+
+// An event's picture is a path in the photo bucket, the same place the
+// archive keeps its uploads. Absolute addresses are passed through unchanged
+// so an event that ever stored one still renders.
+export function eventImageUrl(image) {
+  if (!image) return "";
+  if (/^https?:\/\//i.test(image)) return image;
+  return window.photos ? window.photos.publicUrl(image) : "";
 }
 
 export function decodeEvent(raw, id) {
@@ -1408,7 +1416,7 @@ export default function App() {
   const [eventLinkDraft, setEventLinkDraft] = useState("");
   const [showEventLinkInput, setShowEventLinkInput] = useState(false);
   const [eventImageDraft, setEventImageDraft] = useState("");
-  const [showEventImageInput, setShowEventImageInput] = useState(false);
+  const [eventImageUploading, setEventImageUploading] = useState(false);
   const [eventStartDraft, setEventStartDraft] = useState("");
   const [eventEndDraft, setEventEndDraft] = useState("");
   // Attendee chips currently playing an animation: chip id -> "in" | "out".
@@ -2193,7 +2201,6 @@ export default function App() {
     setEventLinkDraft(existing?.link || "");
     setShowEventLinkInput(!!existing?.link);
     setEventImageDraft(existing?.image || "");
-    setShowEventImageInput(!!existing?.image);
     const { start, end } = splitDuration(existing?.duration || "");
     setEventStartDraft(start);
     setEventEndDraft(end);
@@ -2209,7 +2216,6 @@ export default function App() {
     setEventLinkDraft("");
     setShowEventLinkInput(false);
     setEventImageDraft("");
-    setShowEventImageInput(false);
     setEventStartDraft("");
     setEventEndDraft("");
   }
@@ -2231,9 +2237,7 @@ export default function App() {
       // Normalised on the way in, so every reader downstream gets either a
       // usable http(s) address or nothing at all.
       link: safeEventLink(eventLinkDraft),
-      // Same gate as the link: an address that is not http(s) is not an
-      // image this card is going to load.
-      image: safeEventLink(eventImageDraft),
+      image: eventImageDraft,
       duration,
       createdBy: existing?.createdBy || name,
       attendees: existing?.attendees || [],
@@ -2350,6 +2354,30 @@ export default function App() {
   // ten photos would otherwise decode ten full-size bitmaps at once, which is
   // where a browser tab runs out of memory and dies. Each one appears as it
   // lands, so the wait is visible rather than silent.
+  // The event's own picture, uploaded rather than linked. It goes to the same
+  // bucket as the archive's photos but under a folder of its own, because it
+  // is not one of them: it belongs to the event, not to the day's album, and
+  // it carries no kv_store row -- the event itself holds the path.
+  //
+  // Uploaded before the event is saved, which is why the path cannot use the
+  // event id: a new event has none yet. A timestamp is enough to be unique.
+  async function uploadEventImage(iso, fileList) {
+    const file = Array.from(fileList || []).find((f) => f.type.startsWith("image/"));
+    if (!file || !window.photos) return;
+    setEventImageUploading(true);
+    try {
+      const { blob } = await downscaleImage(file);
+      const path = `${iso}/naslovne/${Date.now()}.jpg`;
+      await window.photos.upload(path, blob);
+      setEventImageDraft(path);
+    } catch (e) {
+      console.error("event image upload failed:", e);
+      setError("Slike ni bilo mogoče naložiti. Poskusi znova.");
+    } finally {
+      setEventImageUploading(false);
+    }
+  }
+
   async function uploadPhotos(iso, eventId, fileList) {
     const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
     if (!files.length || !name || !window.photos) return;
@@ -3318,6 +3346,7 @@ export default function App() {
     const isEditingHere = editingEvent && editingEvent.iso === iso;
 
     function eventForm(id) {
+      const eventImageInputId = `event-image-${iso}-${id || "new"}`;
       const existing = id != null ? events.find((e) => e.id === id) : null;
       return (
         <div style={styles.eventCard(eventHues[eventKey(iso, id)])} key={id || "new"}>
@@ -3401,33 +3430,45 @@ export default function App() {
               <Link size={12} /> Dodaj povezavo
             </button>
           )}
-          {showEventImageInput ? (
-            <div style={styles.noteBlock}>
-              <input
-                style={styles.input}
-                type="url"
-                inputMode="url"
-                placeholder="Povezava do slike (https://…)"
-                value={eventImageDraft}
-                onChange={(e) => setEventImageDraft(e.target.value)}
+          {eventImageDraft ? (
+            <div style={styles.eventImageRow}>
+              <img
+                src={eventImageUrl(eventImageDraft)}
+                alt=""
+                style={styles.eventImagePreview}
               />
               <button
                 style={styles.noteRemoveButton}
-                onClick={() => {
-                  setEventImageDraft("");
-                  setShowEventImageInput(false);
-                }}
+                onClick={() => setEventImageDraft("")}
               >
                 Odstrani sliko
               </button>
             </div>
           ) : (
-            <button
-              style={styles.addNoteButton}
-              onClick={() => setShowEventImageInput(true)}
-            >
-              <ImageIcon size={12} /> Dodaj sliko
-            </button>
+            <>
+              {/* A button rather than a label, so the picker only opens from
+                  the press and nothing else can trip it. */}
+              <button
+                style={styles.addNoteButton}
+                disabled={eventImageUploading}
+                onClick={() => document.getElementById(eventImageInputId)?.click()}
+              >
+                <Plus size={12} />{" "}
+                {eventImageUploading ? "Nalagam …" : "Dodaj sliko"}
+              </button>
+              <input
+                id={eventImageInputId}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  uploadEventImage(iso, e.target.files);
+                  // Cleared so picking the same file twice in a row still
+                  // fires a change event the second time.
+                  e.target.value = "";
+                }}
+              />
+            </>
           )}
           <input
             style={styles.input}
@@ -3489,7 +3530,7 @@ export default function App() {
                   content, so the text stays on top wherever they meet. */}
               {event.image && (
                 <img
-                  src={event.image}
+                  src={eventImageUrl(event.image)}
                   alt=""
                   loading="lazy"
                   style={styles.eventCardImage}
