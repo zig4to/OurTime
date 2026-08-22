@@ -2982,22 +2982,15 @@ export default function App() {
   // Stands between the add button and the file picker. The picker itself is
   // still the hidden input the strip renders; this only decides whether the
   // click reaches it, which is why the input's id travels in the state.
+  //
+  // Centred rather than the bottom sheet the other two dialogs use: those
+  // are things you go into and read, this is one sentence you either accept
+  // or dismiss, and it should land where the eye already is.
   const photoNoticeModal = photoNotice && (
-    <div style={styles.modalOverlay} onClick={() => setPhotoNotice(null)}>
-      <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.modalHeader}>
-          <div>
-            <div style={styles.modalEyebrow}>Preden naložiš</div>
-            <div style={styles.modalTitle}>Naj bodo dobre</div>
-          </div>
-          <button style={styles.modalClose} onClick={() => setPhotoNotice(null)}>
-            Zapri
-          </button>
-        </div>
-        <p style={styles.introText}>
-          Izberi nekaj najboljših. Trideset skoraj enakih nihče ne prelista,
-          prostor pa se napolni hitreje, kot se zdi. Svoje lahko kadar koli
-          odstraniš.
+    <div style={styles.centerOverlay} onClick={() => setPhotoNotice(null)}>
+      <div style={styles.noticeCard} onClick={(e) => e.stopPropagation()}>
+        <p style={styles.noticeText}>
+          Dodaj samo lepe slike in ne pretiravaj z količino.
         </p>
         <div style={styles.photoNoticeActions}>
           <button
@@ -3023,6 +3016,7 @@ export default function App() {
       </div>
     </div>
   );
+
   const settingsModal = showSettings && (
     <div style={styles.modalOverlay} onClick={() => setShowSettings(false)}>
       <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>

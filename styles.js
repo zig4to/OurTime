@@ -1136,6 +1136,37 @@ export const styles = {
     color: "var(--text-muted)",
     cursor: "pointer",
   },
+  // The other two dialogs deliberately rise from the bottom edge; this one
+  // sits in the middle, so it needs its own overlay rather than a flag on
+  // the shared one.
+  centerOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(27,46,36,0.45)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    zIndex: 50,
+  },
+  noticeCard: {
+    width: "100%",
+    maxWidth: 340,
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    padding: 20,
+    borderRadius: 16,
+    background: "var(--card-bg)",
+    border: `1.5px solid ${GREEN}`,
+    boxShadow: "0 24px 48px -24px rgba(20, 30, 25, 0.6)",
+  },
+  noticeText: {
+    margin: 0,
+    fontSize: 14.5,
+    lineHeight: 1.5,
+    color: "var(--text-heading)",
+  },
   photoNoticeActions: {
     display: "flex",
     justifyContent: "flex-end",
