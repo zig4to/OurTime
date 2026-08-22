@@ -115,3 +115,61 @@ create policy "push update" on kv_store
 
 create policy "push delete" on kv_store
   for delete using (key like 'push:%');
+
+-- The Edge Function that sends push notifications connects as service_role,
+-- which bypasses RLS but is still subject to table privileges -- the same two
+-- layers that made the anon grant above necessary. Without this it fails with
+-- "permission denied for table kv_store" despite having every policy waived.
+grant select, insert, update, delete on table kv_store to service_role;
+
+-- Notify on a new dogodek ---------------------------------------------------
+-- Calls the notify-event Edge Function (supabase/functions/notify-event) so
+-- everyone but the creator gets a push when an event is added.
+--
+-- This is what the dashboard's Database Webhooks UI builds, done by hand:
+-- that UI needs a supabase_functions schema which only appears once webhooks
+-- have been enabled, and this project has never had them. Reaching for pg_net
+-- directly is also the better shape, because the key filter can live here --
+-- availability saves, comments and photos never invoke the function at all,
+-- where a webhook would have fired on every insert.
+--
+-- pg_net posts asynchronously, so saving an event never waits on the
+-- notification and a slow or failed send cannot make the save fail.
+create extension if not exists pg_net;
+
+create or replace function notify_new_event()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  if new.key like 'avail:%:__event__%' then
+    perform net.http_post(
+      url := 'https://mpiliybdfhgqslubvhwd.supabase.co/functions/v1/notify-event',
+      body := jsonb_build_object(
+        'type', 'INSERT',
+        'record', jsonb_build_object('key', new.key, 'value', new.value)
+      ),
+      -- The publishable key, same one the browser ships. It only gets the
+      -- request past the function's JWT check; the function itself runs as
+      -- service_role.
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer sb_publishable_3888vcj_lpaerHs9H74Llg_-0p1W_MC'
+      ),
+      timeout_milliseconds := 5000
+    );
+  end if;
+  return new;
+end;
+$$;
+
+create trigger notify_new_event_trigger
+after insert on kv_store
+for each row
+execute function notify_new_event();
+
+-- The function's secrets are NOT here and must never be: VAPID_PUBLIC_KEY,
+-- VAPID_PRIVATE_KEY and VAPID_SUBJECT are set in the dashboard under Edge
+-- Function Secrets. The private key exists in exactly two places -- there,
+-- and a password manager.

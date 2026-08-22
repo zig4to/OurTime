@@ -1881,6 +1881,20 @@ export default function App() {
   useEffect(() => {
     if (days.length && !hasAutoOpenedRef.current) {
       hasAutoOpenedRef.current = true;
+      // Arriving from a notification: the push carries "#<iso>" so the tap
+      // lands on the event someone was told about rather than at the top of
+      // the calendar. Guarded to the visible window -- a notification left
+      // unread for two weeks points at a day no longer shown, and opening
+      // today is a better answer than opening nothing.
+      const fromHash = (window.location.hash || "").replace(/^#/, "");
+      if (/^\d{4}-\d{2}-\d{2}$/.test(fromHash) && days.includes(fromHash)) {
+        setOpenDay(fromHash);
+        setScrollToDay(fromHash);
+        // Cleared so a reload later does not jump back to a day the person
+        // has long since dealt with.
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+        return;
+      }
       setOpenDay(days[0]);
     }
   }, [days]);
