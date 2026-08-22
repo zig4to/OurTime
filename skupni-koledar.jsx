@@ -7,6 +7,8 @@ import {
   Trash2,
   MessageSquare,
   Settings,
+  Menu,
+  Archive,
   Sun,
   Moon,
   Plus,
@@ -903,6 +905,8 @@ export default function App() {
   const [viewPerson, setViewPerson] = useState(null); // { name, hours, iso, dateText }
   const [theme, setTheme] = useState("light");
   const [showSettings, setShowSettings] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
   const [dayEvents, setDayEvents] = useState({}); // { iso: [{ id, title, description, duration, createdBy, attendees }] }
   const [editingEvent, setEditingEvent] = useState(null); // { iso, id } of the open event form, id null means "new event"; or null
   const [eventTitleDraft, setEventTitleDraft] = useState("");
@@ -947,6 +951,31 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  // Closing on any pointer down outside the menu, rather than on the menu
+  // losing focus: the panel's own buttons take focus as you move through it,
+  // and a blur handler would shut it before the click it was blurring for
+  // ever landed. Escape is here too because a dropdown that traps you until
+  // you find its edge is worse than no dropdown.
+  //
+  // Up here with the other hooks, not down beside the markup it belongs to:
+  // App returns early while loading and while signed out, and a hook declared
+  // past those returns runs on some renders and not others.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    }
+    function onKeyDown(e) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!scrollToDay) return;
@@ -1779,6 +1808,41 @@ export default function App() {
     </button>
   );
 
+  // The avatar and the menu share one positioned box: the dropdown hangs off
+  // it, and the ref that decides what counts as "outside" has to cover both,
+  // or tapping the avatar to close the menu would read as an outside click
+  // and a toggle at the same time.
+  const headerActions = (
+    <div ref={menuRef} style={styles.headerActions}>
+      {avatarButton}
+      <button
+        style={styles.menuButton}
+        onClick={() => setMenuOpen((open) => !open)}
+        aria-label="Meni"
+        aria-expanded={menuOpen}
+      >
+        <Menu size={18} />
+      </button>
+      {menuOpen && (
+        <div style={styles.menuPanel}>
+          <button style={styles.menuItem(true)} disabled>
+            <Archive size={14} /> Arhiv
+            <span style={styles.menuItemNote}>kmalu</span>
+          </button>
+          <button
+            style={styles.menuItem(false)}
+            onClick={() => {
+              setMenuOpen(false);
+              setShowSettings(true);
+            }}
+          >
+            <Settings size={14} /> Nastavitve
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   const nameEditRow = editingName && (
     <div style={styles.editNameRow}>
       <div style={styles.editNameInputs}>
@@ -2264,7 +2328,7 @@ export default function App() {
                 kdaj maš cajt?
               </h1>
             </div>
-            {avatarButton}
+            {headerActions}
           </header>
 
           {/* Above the event strip, not below it: the form belongs to the
@@ -2570,7 +2634,7 @@ export default function App() {
             kdaj maš cajt?
           </h1>
         </div>
-        {avatarButton}
+        {headerActions}
       </header>
 
       {/* Above the event strip, not below it: the form belongs to the
