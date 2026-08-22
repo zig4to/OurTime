@@ -2959,16 +2959,22 @@ export default function App() {
     </div>
   );
 
-  const settingsButton = (
-    <button style={styles.settingsButton} onClick={() => setShowSettings(true)}>
-      <Settings size={14} /> Nastavitve
-    </button>
-  );
-
-  const appFooterNote = (
-    <p style={styles.appFooterNote}>
-      Aplikacija je še v razvoju in testiranju. Hvala za razumevanje
-    </p>
+  // One band instead of three loose pieces stacked down the page. The tint
+  // and the rule across the top are what say the page has ended -- without
+  // them a centred line of small grey text just looks like more content.
+  const appFooter = (
+    <footer style={styles.appFooter}>
+      <div style={styles.appFooterLine}>
+        <Users size={13} color="var(--text-faint)" />
+        <span>Koledar si delijo vsi, ki odprejo to povezavo.</span>
+      </div>
+      <div style={styles.appFooterNote}>
+        Aplikacija je še v razvoju — hvala za razumevanje.
+      </div>
+      <button style={styles.settingsButton} onClick={() => setShowSettings(true)}>
+        <Settings size={14} /> Nastavitve
+      </button>
+    </footer>
   );
 
   const settingsModal = showSettings && (
@@ -3884,12 +3890,7 @@ export default function App() {
 
           {whatsNewSection}
 
-          <div style={styles.footer}>
-            <Users size={13} color="var(--text-faint)" />
-            <span>Koledar si delijo vsi, ki odprejo to povezavo</span>
-          </div>
-          {settingsButton}
-          {appFooterNote}
+          {appFooter}
         </div>
 
         {viewPersonModal}
@@ -4233,12 +4234,7 @@ export default function App() {
 
       {whatsNewSection}
 
-      <div style={styles.footer}>
-        <Users size={13} color="var(--text-faint)" />
-        <span>Koledar si delijo vsi, ki odprejo to povezavo</span>
-      </div>
-      {settingsButton}
-      {appFooterNote}
+      {appFooter}
 
       {viewPersonModal}
       {settingsModal}

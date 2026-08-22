@@ -1678,21 +1678,33 @@ export const styles = {
     fontSize: 10.5,
     color: "var(--text-fainter)",
   },
-  footer: {
+  // A band, not a paragraph. It carries the card background rather than
+  // the page's, which on both themes is a step lighter -- enough to read
+  // as a different surface without drawing the eye to itself.
+  appFooter: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 32,
+    padding: "22px 20px 26px 20px",
+    background: "var(--card-bg)",
+    borderTop: "1px solid var(--border)",
+  },
+  appFooterLine: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
     gap: 6,
-    marginTop: 24,
     fontSize: 12,
     color: "var(--text-faint)",
+    textAlign: "center",
   },
   settingsButton: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    margin: "16px auto 0 auto",
+    marginTop: 6,
     padding: "9px 16px",
     fontSize: 12.5,
     fontWeight: 600,
@@ -1703,9 +1715,7 @@ export const styles = {
     cursor: "pointer",
   },
   appFooterNote: {
-    margin: "20px auto 0 auto",
     maxWidth: 320,
-    padding: "0 20px",
     fontSize: 11,
     lineHeight: 1.5,
     color: "var(--text-fainter)",
