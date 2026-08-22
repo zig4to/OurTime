@@ -1151,6 +1151,14 @@ export const styles = {
   // Only rendered when an event actually carries a link, so it can look
   // like a thing to press rather than like a field that happens to be
   // empty.
+  // The card is a column, so the link needs a row of its own to have
+  // anything sit beside it. Wrapping because two buttons and a narrow
+  // phone is a real combination.
+  eventLinkRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+  },
   eventLink: {
     alignSelf: "flex-start",
     display: "inline-flex",

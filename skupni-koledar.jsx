@@ -18,6 +18,7 @@ import {
   Smartphone,
   Check,
   Link,
+  ListChecks,
   Sparkles,
   ArrowLeft,
   CalendarDays,
@@ -1046,6 +1047,11 @@ const AUTO_ADVANCE_MS = 6000;
 // up everywhere below instead of a plain 0.
 // How long a tapped chip keeps its name up. Long enough to read, short
 // enough that you do not have to dismiss it.
+// The packing list, which lives in its own little app. Every event gets the
+// button, with no per-event setting: what you forget is the same whatever
+// the outing is.
+const CHECKLIST_URL = "https://zig4to.github.io/Checkliste/";
+
 const NAME_POPUP_MS = 3000;
 
 // A person's initials, which say who only if you already know the initials.
@@ -3861,18 +3867,29 @@ export default function App() {
               {event.description && (
                 <p style={styles.eventDescription}>{event.description}</p>
               )}
-              {event.link && (
+              <div style={styles.eventLinkRow}>
+                {event.link && (
+                  <a
+                    style={styles.eventLink}
+                    href={event.link}
+                    target="_blank"
+                    // noreferrer as well as noopener: the opened page has no
+                    // business knowing which calendar sent it, and anyone can
+                    // add an event here.
+                    rel="noopener noreferrer"
+                  >
+                    <Link size={12} /> Povezava
+                  </a>
+                )}
                 <a
                   style={styles.eventLink}
-                  href={event.link}
+                  href={CHECKLIST_URL}
                   target="_blank"
-                  // noreferrer as well as noopener: the opened page has no business
-                  // knowing which calendar sent it, and anyone can add an event here.
                   rel="noopener noreferrer"
                 >
-                  <Link size={12} /> Povezava
+                  <ListChecks size={12} /> Nam Puzabu
                 </a>
-              )}
+              </div>
               {/* Confirming removes this row rather than switching it to a
                   "you're going" state: once you're on the list your own chip
                   below says so, and it is also how you take it back. Two
