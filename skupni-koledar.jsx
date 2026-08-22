@@ -911,6 +911,11 @@ const DAY_CHIPS_SHOWN = 2;
 // would eventually read every row the club has ever written.
 const ARCHIVE_SLAB_DAYS = 30;
 
+// Days the home list shows before it stops. The window behind it is still
+// the full fourteen -- this only decides how much of it is on screen, so
+// nothing about loading, the event strip or the archive changes.
+const DAYS_SHOWN = 10;
+
 // Below this the gesture reads as a tap or a stray wobble, not a swipe, and
 // the strip springs back to where it was.
 const SWIPE_THRESHOLD_PX = 40;
@@ -1292,6 +1297,7 @@ export default function App() {
   const [dayData, setDayData] = useState({}); // { iso: { name: { hours, note } } }
   const [openDay, setOpenDay] = useState(null);
   const [scrollToDay, setScrollToDay] = useState(null);
+  const [showAllDays, setShowAllDays] = useState(false);
   // Re-rolled once per load, so the two people a collapsed day shows change
   // from visit to visit rather than the same name always leading. A ref and
   // not state: these rows re-render constantly -- the event strip alone
@@ -2000,6 +2006,10 @@ export default function App() {
   // collapsed card used to be. Handing the iso to state lets the effect below
   // run it once React has laid the expanded day out.
   function openEventDay(iso) {
+    // An event can sit past the tenth day, where its card is not rendered
+    // at all. Scrolling to it would find nothing, so reveal the rest of
+    // the list first -- the effect that scrolls runs after that render.
+    if (days.indexOf(iso) >= DAYS_SHOWN) setShowAllDays(true);
     selectDay(iso);
     setScrollToDay(iso);
   }
@@ -3811,7 +3821,7 @@ export default function App() {
       )}
 
       <div style={styles.list}>
-        {days.map((d) => {
+        {(showAllDays ? days : days.slice(0, DAYS_SHOWN)).map((d) => {
           const iso = d;
           const entries = dayData[iso] || {};
           const allEntries = Object.entries(entries).sort(([a], [b]) =>
@@ -4108,6 +4118,15 @@ export default function App() {
             </div>
           );
         })}
+        {!showAllDays && days.length > DAYS_SHOWN && (
+          <button
+            style={styles.moreDaysButton}
+            onClick={() => setShowAllDays(true)}
+          >
+            Pokaži še {days.length - DAYS_SHOWN}{" "}
+            {pluralSl(days.length - DAYS_SHOWN, ["dan", "dneva", "dnevi", "dni"])}
+          </button>
+        )}
       </div>
 
       <div style={styles.footer}>

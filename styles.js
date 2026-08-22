@@ -1306,6 +1306,20 @@ export const styles = {
     borderRadius: 9,
     cursor: "pointer",
   },
+  // Sits inside the day list, so it reads as the list continuing rather
+  // than as a control belonging to the page around it.
+  moreDaysButton: {
+    alignSelf: "center",
+    marginTop: 4,
+    padding: "9px 16px",
+    fontSize: 13,
+    fontWeight: 700,
+    color: "var(--text-secondary)",
+    background: "var(--card-bg)",
+    border: "1px solid var(--border)",
+    borderRadius: 10,
+    cursor: "pointer",
+  },
   archiveIntro: {
     display: "flex",
     flexDirection: "column",
