@@ -41,6 +41,13 @@ async function loginAsThrowawayUser(page, baseUrl) {
   await page.fill('input[placeholder="Priimek"]', "Uporabnik");
   await page.click("text=Vstopi");
   await page.waitForTimeout(1000);
+  // A fresh browser context has never been shown how to install the app, so
+  // that screen stands between sign-in and the calendar these tests are for.
+  const installHint = page.locator("text=Razumem");
+  if (await installHint.count()) {
+    await installHint.click();
+    await page.waitForTimeout(800);
+  }
 }
 
 function eventRow(iso, idSuffix, value) {

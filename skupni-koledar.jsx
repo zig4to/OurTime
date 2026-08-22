@@ -9,6 +9,11 @@ import {
   Settings,
   Menu,
   Archive,
+  Chrome,
+  MoreVertical,
+  Download,
+  Smartphone,
+  Check,
   Link,
   Sparkles,
   ArrowLeft,
@@ -1405,6 +1410,9 @@ export default function App() {
   // Whether the visible window has been read once. Not `refreshing`, which
   // also goes true on every later reload -- this is only about the first.
   const [firstLoadDone, setFirstLoadDone] = useState(false);
+  // null until asked, then true once the hint has been dismissed on this
+  // device -- or never shown at all, because the app is already installed.
+  const [installHintSeen, setInstallHintSeen] = useState(null);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   // Re-rolled once per load, so the two people a collapsed day shows change
   // from visit to visit rather than the same name always leading. A ref and
@@ -1596,6 +1604,30 @@ export default function App() {
     })();
   }, []);
 
+  // Device-local, like the name and the theme: whether this phone has been
+  // shown how to install the app.
+  useEffect(() => {
+    (async () => {
+      // Running from the home screen already means the instructions describe
+      // something this device has done, so they are never shown here.
+      const installed =
+        (window.matchMedia &&
+          window.matchMedia("(display-mode: standalone)").matches) ||
+        window.navigator.standalone === true;
+      if (installed) {
+        setInstallHintSeen(true);
+        return;
+      }
+      try {
+        const res = await window.storage.get("install-hint", false);
+        setInstallHintSeen(res && res.value === "seen");
+      } catch (e) {
+        // Unreadable storage should cost at most one extra screen, not the
+        // app, so fall through to showing it.
+        setInstallHintSeen(false);
+      }
+    })();
+  }, []);
   const loadAllData = useCallback(async () => {
     if (days.length === 0) return;
     setRefreshing(true);
@@ -2037,6 +2069,15 @@ export default function App() {
     window.scrollTo(0, 0);
   }
 
+  async function dismissInstallHint() {
+    setInstallHintSeen(true);
+    try {
+      await window.storage.set("install-hint", "seen", false);
+    } catch (e) {
+      // Worth one more showing next time rather than an error banner over a
+      // calendar that is otherwise fine.
+    }
+  }
   function toggleEditingName() {
     if (editingName) {
       // Second click on the same icon closes the form, same as "Prekliči".
@@ -2618,12 +2659,73 @@ export default function App() {
     </div>
   );
 
+  const installSteps = [
+    {
+      icon: <Chrome size={18} />,
+      title: "Odpri v Chromu",
+      detail: "Povezavo do koledarja prilepi v Chrome. V drugih brskalnikih namestitev pogosto ni na voljo.",
+    },
+    {
+      icon: <MoreVertical size={18} />,
+      title: "Tapni tri pike",
+      detail: "Zgoraj desno v Chromu.",
+    },
+    {
+      icon: <Download size={18} />,
+      title: "Izberi Namesti in ustvari bližnjico",
+      detail: "V meniju, ki se odpre.",
+    },
+    {
+      icon: <Smartphone size={18} />,
+      title: "Izberi Namesti aplikacijo",
+      detail: "Če te možnosti ni, izberi Namesti bližnjico.",
+    },
+  ];
+
+  const installScreen = (
+    <div style={styles.centerScreen}>
+      <div style={styles.installCard}>
+        <div>
+          <div style={styles.installEyebrow}>Garaža Klub Koledar</div>
+          <h1 style={styles.installTitle}>Namesti na domači zaslon</h1>
+        </div>
+        <p style={styles.installLead}>
+          Nameščena se odpre čez cel zaslon, brez naslovne vrstice brskalnika,
+          in je precej prijetnejša za uporabo.
+        </p>
+        <div style={styles.installSteps}>
+          {installSteps.map((step, i) => (
+            <div key={step.title} style={styles.installStep}>
+              <span style={styles.installStepIcon}>{step.icon}</span>
+              <div style={styles.installStepBody}>
+                <div style={styles.installStepTitle}>
+                  <span style={styles.installStepNum}>{i + 1}</span>
+                  {step.title}
+                </div>
+                <div style={styles.installStepDetail}>{step.detail}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button style={styles.primaryButton} onClick={dismissInstallHint}>
+          <Check size={16} /> Razumem
+        </button>
+      </div>
+    </div>
+  );
   if (loading) return appLoader;
 
-  // Signed in but the window has not landed yet. Without this the calendar
-  // paints itself empty -- fourteen days of "Še nihče ni vnesel" -- and then
-  // fills in, which reads as an app that lost the data and found it again.
-  if (name && !needsSurname && !firstLoadDone) return appLoader;
+  // Signed in: the install hint comes before the calendar, and before
+  // waiting on the window query too -- there is nothing on it that needs
+  // the data, so it may as well be read while that lands.
+  if (name && !needsSurname) {
+    if (installHintSeen === null) return appLoader;
+    if (installHintSeen === false) return installScreen;
+    // Without this the calendar paints itself empty -- fourteen days of
+    // "Še nihče ni vnesel" -- and then fills in, which reads as an app that
+    // lost the data and found it again.
+    if (!firstLoadDone) return appLoader;
+  }
 
   if (!name || needsSurname) {
     const draftReady = firstDraft.trim() && lastDraft.trim();
