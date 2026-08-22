@@ -108,6 +108,29 @@ export const styles = {
       "'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
     padding: 20,
   },
+  appLoader: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 18,
+  },
+  // The rail the bar runs along. Positioned and clipped, because the bar
+  // is absolute inside it and starts and ends outside its ends.
+  appLoaderTrack: {
+    position: "relative",
+    overflow: "hidden",
+    width: 190,
+    height: 5,
+    borderRadius: 999,
+    background: GREEN_BG,
+  },
+  appLoaderName: {
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.14em",
+    color: "var(--text-muted)",
+  },
   loadingDot: {
     width: 10,
     height: 10,

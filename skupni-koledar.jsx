@@ -132,6 +132,41 @@ const THEME_CSS = `
       100% { opacity: 0; }
     }
   }
+  /* The loader: a green bar that runs the length of its track and starts
+     again. Indeterminate on purpose -- the window query has no progress to
+     report, so a bar that filled would be inventing one. It lives here
+     because @keyframes cannot be written as an inline style.
+
+     The translate percentages are of the bar's own width, not the track's,
+     which is why crossing a track at 34% wide takes it past 300%. */
+  .appLoaderBar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 34%;
+    border-radius: 999px;
+    /* Solid through the middle with only the ends feathered. Fading from
+       nothing to green and back left the bar almost invisible whenever it
+       was near either end of its run. */
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--green) 28%,
+      var(--green) 72%,
+      transparent 100%
+    );
+    animation: appLoaderSweep 1250ms ease-in-out infinite;
+  }
+  @keyframes appLoaderSweep {
+    0%   { transform: translateX(-110%); }
+    100% { transform: translateX(310%); }
+  }
+  /* Motion is the whole point of a loader, so it cannot simply be removed.
+     It slows to something that reads as alive without racing. */
+  @media (prefers-reduced-motion: reduce) {
+    .appLoaderBar { animation-duration: 3200ms; }
+  }
 `;
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -1367,6 +1402,9 @@ export default function App() {
   const [openDay, setOpenDay] = useState(null);
   const [scrollToDay, setScrollToDay] = useState(null);
   const [showAllDays, setShowAllDays] = useState(false);
+  // Whether the visible window has been read once. Not `refreshing`, which
+  // also goes true on every later reload -- this is only about the first.
+  const [firstLoadDone, setFirstLoadDone] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   // Re-rolled once per load, so the two people a collapsed day shows change
   // from visit to visit rather than the same name always leading. A ref and
@@ -1644,6 +1682,9 @@ export default function App() {
       setError("Podatkov ni bilo mogoče naložiti. Poskusi znova.");
     } finally {
       setRefreshing(false);
+      // In the finally, so a failed read still lets the calendar through --
+      // it will show its error banner rather than spinning forever.
+      setFirstLoadDone(true);
     }
   }, [days]);
 
@@ -2566,13 +2607,23 @@ export default function App() {
     }
   }
 
-  if (loading) {
-    return (
-      <div style={styles.centerScreen}>
-        <div style={styles.loadingDot} />
+  const appLoader = (
+    <div style={styles.centerScreen}>
+      <div style={styles.appLoader}>
+        <div style={styles.appLoaderTrack}>
+          <span className="appLoaderBar" />
+        </div>
+        <div style={styles.appLoaderName}>Garaža Klub Koledar</div>
       </div>
-    );
-  }
+    </div>
+  );
+
+  if (loading) return appLoader;
+
+  // Signed in but the window has not landed yet. Without this the calendar
+  // paints itself empty -- fourteen days of "Še nihče ni vnesel" -- and then
+  // fills in, which reads as an app that lost the data and found it again.
+  if (name && !needsSurname && !firstLoadDone) return appLoader;
 
   if (!name || needsSurname) {
     const draftReady = firstDraft.trim() && lastDraft.trim();
