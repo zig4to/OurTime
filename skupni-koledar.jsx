@@ -1993,8 +1993,8 @@ export default function App() {
       // Arriving from a notification: the push carries "#<iso>" so the tap
       // lands on the event someone was told about rather than at the top of
       // the calendar. Guarded to the visible window -- a notification left
-      // unread for two weeks points at a day no longer shown, and opening
-      // today is a better answer than opening nothing.
+      // unread for two weeks points at a day no longer shown, so it falls
+      // through to the plain list rather than scrolling nowhere.
       const fromHash = (window.location.hash || "").replace(/^#/, "");
       if (/^\d{4}-\d{2}-\d{2}$/.test(fromHash) && days.includes(fromHash)) {
         // Through openEventDay rather than setOpenDay: past the tenth day a
@@ -2006,9 +2006,10 @@ export default function App() {
         // Cleared so a reload later does not jump back to a day the person
         // has long since dealt with.
         history.replaceState(null, "", window.location.pathname + window.location.search);
-        return;
       }
-      setOpenDay(days[0]);
+      // Nothing is opened otherwise. Today used to be expanded on arrival,
+      // which pushed the rest of the week below the fold for a day whose
+      // answer the person usually already knows.
     }
   }, [days]);
 

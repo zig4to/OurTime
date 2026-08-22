@@ -50,6 +50,13 @@ async function loginAsThrowawayUser(page, baseUrl) {
   }
 }
 
+// Day cards all start collapsed, so every test here has to open today before
+// it can reach the event inside it.
+async function openToday(page) {
+  await page.locator('button:has-text("Danes")').first().click();
+  await page.waitForTimeout(300);
+}
+
 function eventRow(iso, idSuffix, value) {
   return { key: `avail:${iso}:__event__${idSuffix}`, value: JSON.stringify(value) };
 }
@@ -86,6 +93,7 @@ async function runTest(name, fn) {
         }),
       ]);
       await loginAsThrowawayUser(page, server.url);
+      await openToday(page);
       await page.click('button[aria-label="Uredi dogodek"]');
       await page.waitForTimeout(300);
 
@@ -112,6 +120,7 @@ async function runTest(name, fn) {
         }),
       ]);
       await loginAsThrowawayUser(page, server.url);
+      await openToday(page);
       await page.click('button[aria-label="Uredi dogodek"]');
       await page.waitForTimeout(300);
 
@@ -142,6 +151,7 @@ async function runTest(name, fn) {
         }),
       ]);
       await loginAsThrowawayUser(page, server.url);
+      await openToday(page);
       const editButtons = page.locator('button[aria-label="Uredi dogodek"]');
       assert.equal(await editButtons.count(), 2);
       await editButtons.nth(1).click();
@@ -164,6 +174,7 @@ async function runTest(name, fn) {
         }),
       ]);
       await loginAsThrowawayUser(page, server.url);
+      await openToday(page);
 
       // Start a new event, type a draft title, then cancel without saving.
       await page.click('button[aria-label="Dodaj nov dogodek"]');
