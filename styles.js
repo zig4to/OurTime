@@ -1036,23 +1036,33 @@ export const styles = {
     // showed through the wedge was always its right-hand end. Sized to the
     // wedge, object-position: center means the middle of the picture is what
     // the wedge shows.
-    inset: "0 0 0 44%",
+    // width is set rather than left with right: 0. An <img> is a replaced
+    // element, so left and right do not stretch it -- with width auto it takes
+    // its intrinsic aspect against the height and spills past the card, which
+    // is exactly what it was doing: 112% of the card wide, and object-position
+    // centring the picture in a box that mostly hung off the edge.
+    top: 0,
+    bottom: 0,
+    left: "30%",
+    width: "70%",
     height: "100%",
     objectFit: "cover",
     objectPosition: "center",
-    // Card-relative 72%/48% expressed against this narrower box.
-    clipPath: "polygon(50% 0, 100% 0, 100% 100%, 7% 100%)",
+    // Card-relative 52%/38%, restated against this box. The wedge has to keep
+    // reaching the card's right edge, so moving the cut left means widening the
+    // box rather than sliding it -- which is why left/width moved with it.
+    clipPath: "polygon(31% 0, 100% 0, 100% 100%, 11% 100%)",
     // Held back from full strength so the card keeps its own colour and the
     // picture reads as part of it rather than pasted on top.
-    opacity: 0.82,
+    opacity: 0.6,
     // The clip alone left a hard diagonal. This fades the picture in across
-    // that edge instead: 113deg is perpendicular to the cut, so the bands of
+    // that edge instead: 106deg is perpendicular to the cut, so the bands of
     // the gradient run parallel to it and the ramp is even along its whole
     // length. The stops are measured along that axis across the whole card,
     // not across the wedge, which is why they start well before it. Prefixed
     // as well, for Safari.
-    maskImage: "linear-gradient(113deg, transparent 4%, #000 52%)",
-    WebkitMaskImage: "linear-gradient(113deg, transparent 4%, #000 52%)",
+    maskImage: "linear-gradient(106deg, transparent 4%, #000 52%)",
+    WebkitMaskImage: "linear-gradient(106deg, transparent 4%, #000 52%)",
     zIndex: -1,
     pointerEvents: "none",
   },
