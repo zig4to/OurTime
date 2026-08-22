@@ -19,6 +19,7 @@ import {
   Check,
   Link,
   ListChecks,
+  Megaphone,
   Sparkles,
   ArrowLeft,
   CalendarDays,
@@ -478,6 +479,13 @@ export function decodeEvent(raw, id) {
 // stores rather than one list with a flag because an event leaves the
 // calendar the day after it happens -- the arranging is over, and the point
 // of the archive thread is a clean page to write on.
+// Feedback about the app itself is one thread with no day and no event, so
+// it hangs off a pseudo-day. "feedback" is not a date and sorts past every
+// real one, which keeps it out of the window query and every archive slab
+// -- both are bounded by dates -- and lets it reuse the comment machinery
+// whole rather than growing a second copy of it.
+const FEEDBACK_ISO = "feedback";
+
 const COMMENT_MARKER = "__comment__";
 const RECAP_MARKER = "__recap__";
 
@@ -1552,6 +1560,7 @@ export default function App() {
   const [installHintSeen, setInstallHintSeen] = useState(null);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   // Which phone, once asked. Shared by the first-run screen and the footer
   // button, so answering it in one place settles it for the other.
   const [installOs, setInstallOs] = useState(null);
@@ -1829,6 +1838,27 @@ export default function App() {
       for (const iso of days) {
         events[iso].sort((a, b) => Number(a.id) - Number(b.id));
       }
+      // Its own query: the window is a date range and this sorts outside it.
+      // A failure here is not worth losing the calendar over, so it is caught
+      // separately and the section simply comes up empty.
+      try {
+        const fb = await window.storage.range(
+          `avail:${FEEDBACK_ISO}:`,
+          `avail:${FEEDBACK_ISO};`,
+          true
+        );
+        for (const row of (fb && fb.rows) || []) {
+          const parsed = parseCommentPerson(personFromKey(row.key) || "");
+          const comment = parsed && decodeComment(row.value, parsed.commentId);
+          if (comment) {
+            const group = commentGroup(FEEDBACK_ISO, parsed.eventId, parsed.kind);
+            (comments[group] = comments[group] || []).push(comment);
+          }
+        }
+      } catch (e) {
+        console.info("Feedback thread unavailable:", e?.message || e);
+      }
+
       for (const group of Object.keys(comments)) {
         comments[group] = sortComments(comments[group]);
       }
@@ -2021,7 +2051,9 @@ export default function App() {
           if (
             !iso ||
             !person ||
-            (!daysRef.current.includes(iso) && !archiveIsosRef.current.includes(iso))
+            (iso !== FEEDBACK_ISO &&
+              !daysRef.current.includes(iso) &&
+              !archiveIsosRef.current.includes(iso))
           ) {
             return;
           }
@@ -3166,6 +3198,40 @@ export default function App() {
           <InstallGuide os={installOs} onPick={setInstallOs} />
         </div>
       )}
+
+      {/* One thread for the app itself, shared by everyone and tied to no
+          day. Open, rather than a form that swallows what you write: seeing
+          what someone else already said is half of why you would write. */}
+      <button
+        style={styles.whatsNewToggle}
+        onClick={() => setShowFeedback((open) => !open)}
+        aria-expanded={showFeedback}
+      >
+        <Megaphone size={13} />
+        Hvale in graje
+        <ChevronRight
+          size={14}
+          style={{
+            marginLeft: "auto",
+            transform: showFeedback ? "rotate(90deg)" : "none",
+            transition: "transform 150ms ease",
+          }}
+        />
+      </button>
+      {showFeedback && (
+        <div style={styles.whatsNewDay}>
+          <p style={styles.installLead}>
+            Kaj deluje, kaj te moti, kaj manjka. Piši naravnost – popravi se
+            tisto, kar nekdo pove.
+          </p>
+          {renderCommentPanel(
+            FEEDBACK_ISO,
+            "",
+            "plan",
+            "Še nihče ni nič napisal."
+          )}
+        </div>
+      )}
     </div>
   );
   const nameEditRow = editingName && (
@@ -3548,11 +3614,75 @@ export default function App() {
     );
   }
 
+  // The list and the box you write in, without the toggle above them. Split
+  // out because the feedback section is already behind a button of its own
+  // and a second one inside it would be a door behind a door.
+  function renderCommentPanel(iso, eventId, kind = "plan", emptyText) {
+    const key = commentGroup(iso, eventId, kind);
+    const comments = dayComments[key] || [];
+    const draft = commentDrafts[key] || "";
+    return (
+      <div style={styles.commentsPanel}>
+        {comments.length === 0 ? (
+          <div style={styles.commentsEmpty}>
+            {emptyText || "Še ni komentarjev."}
+          </div>
+        ) : (
+          <div style={styles.commentsList}>
+            {comments.map((c) => (
+              <div key={c.id} style={styles.commentRow}>
+                <PersonChip
+                  name={c.author}
+                  color={personColors[c.author] || GREEN}
+                  self={c.author === name}
+                />
+                <div style={styles.commentBody}>
+                  <div style={styles.commentAuthor}>{c.author}</div>
+                  <div style={styles.commentText}>{c.text}</div>
+                </div>
+                {c.author === name && (
+                  <button
+                    style={styles.commentDelete}
+                    onClick={() => deleteComment(iso, eventId, c.id, kind)}
+                    aria-label="Izbriši komentar"
+                    title="Izbriši komentar"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={styles.commentForm}>
+          <input
+            style={styles.commentInput}
+            placeholder="Napiši komentar"
+            value={draft}
+            onChange={(e) =>
+              setCommentDrafts((prev) => ({ ...prev, [key]: e.target.value }))
+            }
+            onKeyDown={(e) => e.key === "Enter" && postComment(iso, eventId, kind)}
+          />
+          <button
+            style={{
+              ...styles.commentSubmit,
+              opacity: draft.trim() ? 1 : 0.5,
+            }}
+            disabled={!draft.trim()}
+            onClick={() => postComment(iso, eventId, kind)}
+          >
+            Objavi
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   function renderCommentThread(iso, eventId, kind = "plan") {
     const key = commentGroup(iso, eventId, kind);
     const comments = dayComments[key] || [];
     const open = openComments === key;
-    const draft = commentDrafts[key] || "";
     return (
       <div style={styles.commentsBlock}>
         <button
@@ -3570,60 +3700,7 @@ export default function App() {
             }}
           />
         </button>
-        {open && (
-          <div style={styles.commentsPanel}>
-            {comments.length === 0 ? (
-              <div style={styles.commentsEmpty}>Še ni komentarjev.</div>
-            ) : (
-              <div style={styles.commentsList}>
-                {comments.map((c) => (
-                  <div key={c.id} style={styles.commentRow}>
-                    <PersonChip
-                      name={c.author}
-                      color={personColors[c.author] || GREEN}
-                      self={c.author === name}
-                    />
-                    <div style={styles.commentBody}>
-                      <div style={styles.commentAuthor}>{c.author}</div>
-                      <div style={styles.commentText}>{c.text}</div>
-                    </div>
-                    {c.author === name && (
-                      <button
-                        style={styles.commentDelete}
-                        onClick={() => deleteComment(iso, eventId, c.id, kind)}
-                        aria-label="Izbriši komentar"
-                        title="Izbriši komentar"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={styles.commentForm}>
-              <input
-                style={styles.commentInput}
-                placeholder="Napiši komentar"
-                value={draft}
-                onChange={(e) =>
-                  setCommentDrafts((prev) => ({ ...prev, [key]: e.target.value }))
-                }
-                onKeyDown={(e) => e.key === "Enter" && postComment(iso, eventId, kind)}
-              />
-              <button
-                style={{
-                  ...styles.commentSubmit,
-                  opacity: draft.trim() ? 1 : 0.5,
-                }}
-                disabled={!draft.trim()}
-                onClick={() => postComment(iso, eventId, kind)}
-              >
-                Objavi
-              </button>
-            </div>
-          </div>
-        )}
+        {open && renderCommentPanel(iso, eventId, kind)}
       </div>
     );
   }
