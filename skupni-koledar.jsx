@@ -941,6 +941,11 @@ export default function App() {
   const [archiveIsos, setArchiveIsos] = useState([]);
   // Which archived event is expanded, as "iso:eventId"; one at a time.
   const [openArchiveEvent, setOpenArchiveEvent] = useState(null);
+  // The oldest event that exists, so the archive knows where history ends
+  // rather than offering to walk backwards forever. undefined until asked,
+  // null when the club has never held one; a failed probe leaves it
+  // undefined, which falls back to one slab per press.
+  const [oldestEventIso, setOldestEventIso] = useState(undefined);
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [archiveError, setArchiveError] = useState(null);
   const menuRef = useRef(null);
@@ -1150,30 +1155,48 @@ export default function App() {
   // looking for; what happened is.
   const loadArchiveSlab = useCallback(async () => {
     if (!days.length || archiveLoading) return;
-    const upper = archiveFrom || days[0]; // exclusive: today is not archive
-    const lower = addDays(upper, -ARCHIVE_SLAB_DAYS);
     setArchiveLoading(true);
     setArchiveError(null);
     try {
-      const res = await window.storage.range(`avail:${lower}`, `avail:${upper}`, true);
       const events = {};
       const comments = {};
-      for (const row of (res && res.rows) || []) {
-        const iso = isoFromKey(row.key);
-        const person = personFromKey(row.key);
-        if (!iso || !person) continue;
-        if (person.startsWith(COMMENT_MARKER)) {
-          const parsed = parseCommentPerson(person);
-          const comment = parsed && decodeComment(row.value, parsed.commentId);
-          if (comment) {
-            const group = commentGroup(iso, parsed.eventId);
-            (comments[group] = comments[group] || []).push(comment);
+      let upper = archiveFrom || days[0]; // exclusive: today is not archive
+      // Only a past event is a floor. The oldest event overall can be one
+      // that has not happened yet, and stepping back towards it would be
+      // stepping towards something the archive will never show.
+      const floor =
+        oldestEventIso && oldestEventIso < days[0] ? oldestEventIso : null;
+
+      // Steps back a slab at a time until this press has something to show,
+      // or until it has reached past the oldest event there is. A quiet
+      // stretch of months would otherwise cost one press each, every one of
+      // them adding nothing to the list.
+      for (;;) {
+        const lower = addDays(upper, -ARCHIVE_SLAB_DAYS);
+        const res = await window.storage.range(`avail:${lower}`, `avail:${upper}`, true);
+        for (const row of (res && res.rows) || []) {
+          const iso = isoFromKey(row.key);
+          const person = personFromKey(row.key);
+          if (!iso || !person) continue;
+          if (person.startsWith(COMMENT_MARKER)) {
+            const parsed = parseCommentPerson(person);
+            const comment = parsed && decodeComment(row.value, parsed.commentId);
+            if (comment) {
+              const group = commentGroup(iso, parsed.eventId);
+              (comments[group] = comments[group] || []).push(comment);
+            }
+          } else if (person.startsWith(EVENT_MARKER)) {
+            const ev = decodeEvent(row.value, person.slice(EVENT_MARKER.length));
+            if (ev) (events[iso] = events[iso] || []).push(ev);
           }
-        } else if (person.startsWith(EVENT_MARKER)) {
-          const ev = decodeEvent(row.value, person.slice(EVENT_MARKER.length));
-          if (ev) (events[iso] = events[iso] || []).push(ev);
         }
+        upper = lower;
+        if (Object.keys(events).length > 0) break;
+        // Nothing found yet: keep going only while something older is known
+        // to exist. An unknown floor means one slab is all this can assume.
+        if (!floor || lower <= floor) break;
       }
+
       for (const iso of Object.keys(events)) {
         events[iso].sort((a, b) => Number(a.id) - Number(b.id));
       }
@@ -1185,13 +1208,32 @@ export default function App() {
       setArchiveIsos((prev) =>
         [...new Set([...prev, ...Object.keys(events)])].sort().reverse()
       );
-      setArchiveFrom(lower);
+      setArchiveFrom(upper);
     } catch (e) {
       setArchiveError("Arhiva ni bilo mogoče naložiti. Poskusi znova.");
     } finally {
       setArchiveLoading(false);
     }
-  }, [days, archiveFrom, archiveLoading]);
+  }, [days, archiveFrom, archiveLoading, oldestEventIso]);
+
+  // Asked once, before the first slab, so the very first press already
+  // knows whether there is anything older to reach for.
+  useEffect(() => {
+    if (view !== "archive" || !name || oldestEventIso !== undefined) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await window.storage.firstKey(`avail:%${EVENT_MARKER}%`, true);
+        if (!cancelled) setOldestEventIso(res && res.key ? isoFromKey(res.key) : null);
+      } catch (e) {
+        // Left undefined on purpose: the button then behaves as it did
+        // before, one slab per press, rather than claiming history ended.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [view, name, oldestEventIso]);
 
   // First slab on first visit only; after that it is the button's job.
   useEffect(() => {
@@ -2505,6 +2547,20 @@ export default function App() {
     );
   }
 
+  // The oldest event that is actually in the past. An upcoming event is the
+  // oldest one there is on a calendar that has only just started, and
+  // reporting it as the bottom of the archive would be reporting a date the
+  // archive can never reach.
+  const archiveFloor =
+    oldestEventIso && days.length && oldestEventIso < days[0] ? oldestEventIso : null;
+
+  // Nothing older left to fetch: either no event has happened yet, or the
+  // slabs have already reached past the oldest one that has. Stays false
+  // while the floor is still unknown, so a failed probe leaves the button.
+  const archiveExhausted =
+    oldestEventIso !== undefined &&
+    (archiveFloor === null || (!!archiveFrom && archiveFrom <= archiveFloor));
+
   const archivePage = (
     <>
       <div style={styles.archiveIntro}>
@@ -2599,17 +2655,27 @@ export default function App() {
       </div>
 
       <div style={styles.archiveMoreRow}>
-        <button
-          style={{ ...styles.archiveMore, opacity: archiveLoading ? 0.5 : 1 }}
-          disabled={archiveLoading}
-          onClick={loadArchiveSlab}
-        >
-          {archiveLoading ? "Nalagam …" : "Naloži še en mesec"}
-        </button>
-        {archiveFrom && (
+        {archiveExhausted ? (
           <div style={styles.archiveRange}>
-            naloženo do {archiveDateLabel(archiveFrom)}
+            {archiveFloor
+              ? `To je vse — najstarejši dogodek je ${archiveDateLabel(archiveFloor)}.`
+              : "Zaenkrat še ni preteklih dogodkov."}
           </div>
+        ) : (
+          <>
+            <button
+              style={{ ...styles.archiveMore, opacity: archiveLoading ? 0.5 : 1 }}
+              disabled={archiveLoading}
+              onClick={loadArchiveSlab}
+            >
+              {archiveLoading ? "Nalagam …" : "Naloži starejše"}
+            </button>
+            {archiveFrom && (
+              <div style={styles.archiveRange}>
+                naloženo do {archiveDateLabel(archiveFrom)}
+              </div>
+            )}
+          </>
         )}
       </div>
     </>

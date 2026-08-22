@@ -103,6 +103,12 @@
           }
           return { keys };
         },
+        // Nothing here can ever match: the only keys routed to this store are
+        // this device's own name and theme, never an "avail:" row. Present so
+        // callers never have to check which store answered, same as subscribe.
+        async firstKey() {
+          return { key: null };
+        },
         async range(fromKey, toKey) {
           const rows = [];
           for (let i = 0; i < localStorage.length; i++) {
@@ -152,6 +158,20 @@
             .like("key", `${prefix}%`);
           if (error) throw error;
           return { keys: (data || []).map((row) => row.key) };
+        },
+        // The single oldest key matching a pattern -- ordered and limited in
+        // postgres rather than fetched and sorted here. The archive asks for
+        // the oldest event so it knows where history ends, and that answer
+        // must not cost a scan of the whole table.
+        async firstKey(like) {
+          const { data, error } = await supabase
+            .from("kv_store")
+            .select("key")
+            .like("key", like)
+            .order("key", { ascending: true })
+            .limit(1);
+          if (error) throw error;
+          return { key: data && data[0] ? data[0].key : null };
         },
         // Keys sort lexicographically and dates are ISO, so a key range is a
         // date range: this pulls the whole visible window in one request
@@ -203,6 +223,7 @@
         set: (key, value, shared) => (shared ? sharedStore : localStore).set(key, value),
         delete: (key, shared) => (shared ? sharedStore : localStore).delete(key),
         list: (prefix, shared) => (shared ? sharedStore : localStore).list(prefix),
+        firstKey: (like, shared) => (shared ? sharedStore : localStore).firstKey(like),
         range: (fromKey, toKey, shared) =>
           (shared ? sharedStore : localStore).range(fromKey, toKey),
         subscribe: (handlers, shared) =>
