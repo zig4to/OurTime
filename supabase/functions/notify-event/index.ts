@@ -103,7 +103,14 @@ Deno.serve(async (req) => {
 
   // Matches the app's greeting, which also shows the first name only.
   const firstName = creator.trim().split(/\s+/)[0] || "Nekdo";
-  const title = `${firstName} vabi na nov dogodek`;
+
+  // The line above these two is written by the system, not by us, and it is
+  // not dependable branding: an installed app is labelled with the manifest's
+  // short_name, but anything short of a real install is labelled with the
+  // origin instead -- "github.io", which tells nobody anything. Carrying the
+  // name ourselves costs one line and reads correctly either way.
+  const title = "maš Cajt?";
+  const messageBody = `${firstName} vabi na nov dogodek`;
 
   const { data: rows, error } = await supabase
     .from("kv_store")
@@ -113,6 +120,7 @@ Deno.serve(async (req) => {
 
   const payload = JSON.stringify({
     title,
+    body: messageBody,
     // Opens the calendar on that day rather than at the top; the app reads
     // this hash on load.
     url: `./#${iso}`,
