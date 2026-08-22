@@ -10,6 +10,7 @@ import {
   Menu,
   Archive,
   Link,
+  Image as ImageIcon,
   Sparkles,
   ArrowLeft,
   CalendarDays,
@@ -402,6 +403,7 @@ export function decodeEvent(raw, id) {
       description: parsed.description || "",
       keyword: parsed.keyword || "",
       link: parsed.link || "",
+      image: parsed.image || "",
       duration: parsed.duration || "",
       createdBy: parsed.createdBy || "",
       attendees: Array.isArray(parsed.attendees) ? parsed.attendees : [],
@@ -1405,6 +1407,8 @@ export default function App() {
   const [eventKeywordDraft, setEventKeywordDraft] = useState("");
   const [eventLinkDraft, setEventLinkDraft] = useState("");
   const [showEventLinkInput, setShowEventLinkInput] = useState(false);
+  const [eventImageDraft, setEventImageDraft] = useState("");
+  const [showEventImageInput, setShowEventImageInput] = useState(false);
   const [eventStartDraft, setEventStartDraft] = useState("");
   const [eventEndDraft, setEventEndDraft] = useState("");
   // Attendee chips currently playing an animation: chip id -> "in" | "out".
@@ -2188,6 +2192,8 @@ export default function App() {
     setEventKeywordDraft(existing?.keyword || "");
     setEventLinkDraft(existing?.link || "");
     setShowEventLinkInput(!!existing?.link);
+    setEventImageDraft(existing?.image || "");
+    setShowEventImageInput(!!existing?.image);
     const { start, end } = splitDuration(existing?.duration || "");
     setEventStartDraft(start);
     setEventEndDraft(end);
@@ -2202,6 +2208,8 @@ export default function App() {
     setEventKeywordDraft("");
     setEventLinkDraft("");
     setShowEventLinkInput(false);
+    setEventImageDraft("");
+    setShowEventImageInput(false);
     setEventStartDraft("");
     setEventEndDraft("");
   }
@@ -2223,6 +2231,9 @@ export default function App() {
       // Normalised on the way in, so every reader downstream gets either a
       // usable http(s) address or nothing at all.
       link: safeEventLink(eventLinkDraft),
+      // Same gate as the link: an address that is not http(s) is not an
+      // image this card is going to load.
+      image: safeEventLink(eventImageDraft),
       duration,
       createdBy: existing?.createdBy || name,
       attendees: existing?.attendees || [],
@@ -3390,6 +3401,34 @@ export default function App() {
               <Link size={12} /> Dodaj povezavo
             </button>
           )}
+          {showEventImageInput ? (
+            <div style={styles.noteBlock}>
+              <input
+                style={styles.input}
+                type="url"
+                inputMode="url"
+                placeholder="Povezava do slike (https://…)"
+                value={eventImageDraft}
+                onChange={(e) => setEventImageDraft(e.target.value)}
+              />
+              <button
+                style={styles.noteRemoveButton}
+                onClick={() => {
+                  setEventImageDraft("");
+                  setShowEventImageInput(false);
+                }}
+              >
+                Odstrani sliko
+              </button>
+            </div>
+          ) : (
+            <button
+              style={styles.addNoteButton}
+              onClick={() => setShowEventImageInput(true)}
+            >
+              <ImageIcon size={12} /> Dodaj sliko
+            </button>
+          )}
           <input
             style={styles.input}
             placeholder="Ključna beseda"
@@ -3444,6 +3483,18 @@ export default function App() {
             : event.attendees;
           return (
             <div style={styles.eventCard(eventHues[eventKey(iso, event.id)])} key={event.id}>
+              {/* Behind the card's own text rather than beside it: a
+                  negative z-index inside the card's isolated stacking
+                  context paints after the background and before the
+                  content, so the text stays on top wherever they meet. */}
+              {event.image && (
+                <img
+                  src={event.image}
+                  alt=""
+                  loading="lazy"
+                  style={styles.eventCardImage}
+                />
+              )}
               <div style={styles.eventHeaderRow}>
                 <div>
                   <div style={styles.eventEyebrow}>

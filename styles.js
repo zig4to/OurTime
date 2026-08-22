@@ -930,6 +930,13 @@ export const styles = {
   // one color wherever it appears. Falls back to green when there is no hue --
   // an event still being created has no identity to have been assigned one.
   eventCard: (hue) => ({
+    // Positioned and isolated for the image wedge: isolation gives the
+    // card its own stacking context, which is what keeps a z-index of -1
+    // above the card's background instead of behind it. overflow clips the
+    // wedge to the rounded corners.
+    position: "relative",
+    isolation: "isolate",
+    overflow: "hidden",
     background: hue ? `rgba(${hue}, 0.16)` : GREEN_BG,
     border: hue ? `1px solid rgba(${hue}, 0.42)` : `1px solid ${GREEN}`,
     borderRadius: 14,
@@ -1000,6 +1007,25 @@ export const styles = {
     borderRadius: 9,
     textDecoration: "none",
     cursor: "pointer",
+  },
+  // A slanted panel down the right-hand side. It covers the whole card and
+  // is cut back to the wedge, so the corners stay square against the card
+  // rather than needing their own box: 72% across at the top, 48% at the
+  // bottom, which leans the way the card's own content thins out.
+  //
+  // object-fit: cover with the position pinned right means a photo of any
+  // shape fills the wedge and is cropped rather than squashed, and never
+  // reaches past it.
+  eventCardImage: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: "right center",
+    clipPath: "polygon(72% 0, 100% 0, 100% 100%, 48% 100%)",
+    zIndex: -1,
+    pointerEvents: "none",
   },
   eventDescription: {
     fontSize: 13,
