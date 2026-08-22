@@ -55,3 +55,33 @@ end $$;
 -- key), but this keeps delete payloads self-describing, and the table is far
 -- too small for the extra write-ahead log volume to matter.
 alter table kv_store replica identity full;
+
+-- Archive photos -----------------------------------------------------------
+-- Photos are files, so they live in Storage rather than in kv_store; what
+-- kv_store holds is one small row per photo carrying its path. An image
+-- inside a row would be pulled by every window query and pushed down the
+-- realtime channel on every change, repeatedly and to everyone.
+--
+-- The size and type limits are not tidiness. Public read plus anon insert
+-- with neither one is an open file host on this project's bandwidth: anybody
+-- could upload anything, of any size, and serve it from this domain.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'arhiv', 'arhiv', true,
+  5242880,  -- 5 MB: admits a phone photo, refuses a video. The app scales
+            -- images down long before this, so hitting it means something
+            -- bypassed the app.
+  array['image/jpeg', 'image/png', 'image/webp', 'image/heic']
+)
+on conflict (id) do nothing;
+
+create policy "arhiv: nalaganje"
+  on storage.objects for insert to anon
+  with check (bucket_id = 'arhiv');
+
+-- Deliberately no delete policy for anon. Read is public and there is no
+-- login, so a delete grant would let any visitor destroy every photo -- and
+-- unlike an availability entry, nobody has a second copy to retype it from.
+-- Removing a photo from the app deletes its kv_store row, which takes it out
+-- of the archive and leaves the file orphaned; purging files is a dashboard
+-- job, done by someone who meant to.

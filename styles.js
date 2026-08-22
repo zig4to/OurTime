@@ -978,6 +978,94 @@ export const styles = {
     flexDirection: "column",
     gap: 8,
   },
+
+  photoBlock: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  // A single scrolling row rather than a wrapping grid: an outing can carry a
+  // dozen photos, and a grid would push the comments below it off the card
+  // entirely. Sideways, the card keeps its height whatever the count.
+  photoRow: {
+    display: "flex",
+    gap: 8,
+    overflowX: "auto",
+    paddingBottom: 4,
+    WebkitOverflowScrolling: "touch",
+  },
+  photoThumb: {
+    flexShrink: 0,
+    width: 72,
+    height: 72,
+    padding: 0,
+    border: "none",
+    borderRadius: 10,
+    overflow: "hidden",
+    background: "var(--divider)",
+    cursor: "pointer",
+    appearance: "none",
+    WebkitAppearance: "none",
+  },
+  // Cover, so a portrait and a landscape shot sit as the same square and the
+  // row stays a straight line.
+  photoThumbImg: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  // Holds the space an upload will occupy, so the row does not jump sideways
+  // as each photo lands.
+  photoPending: {
+    flexShrink: 0,
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    background: "var(--divider)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoAdd: {
+    flexShrink: 0,
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    border: "1.5px dashed var(--border-input)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+  },
+  // Centred rather than bottom-anchored like the other modals: a photo is the
+  // content here, not a sheet of controls that slid up over it.
+  lightboxInner: {
+    margin: "auto",
+    maxWidth: "min(92vw, 900px)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  lightboxImg: {
+    maxWidth: "100%",
+    maxHeight: "78vh",
+    objectFit: "contain",
+    borderRadius: 12,
+    display: "block",
+  },
+  lightboxBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  lightboxAuthor: {
+    fontSize: 12.5,
+    color: "#fff",
+    opacity: 0.85,
+  },
   // Its own row rather than an icon tucked in the header: it is the one
   // control on the card that reveals more of the card, and it should look
   // like it does something rather than like a label.

@@ -408,12 +408,17 @@ export function commentGroup(iso, eventId) {
 // nothing at all, which is what events created before per-day ids existed
 // have. Splitting on the first colon would leave those events unable to hold
 // a comment at all.
-export function parseCommentPerson(person) {
-  if (!person.startsWith(COMMENT_MARKER)) return null;
-  const rest = person.slice(COMMENT_MARKER.length);
+export function parseMarkedPerson(person, marker) {
+  if (!person.startsWith(marker)) return null;
+  const rest = person.slice(marker.length);
   const at = rest.lastIndexOf(":");
   if (at < 0 || at === rest.length - 1) return null;
-  return { eventId: rest.slice(0, at), commentId: rest.slice(at + 1) };
+  return { ownerId: rest.slice(0, at), itemId: rest.slice(at + 1) };
+}
+
+export function parseCommentPerson(person) {
+  const parsed = parseMarkedPerson(person, COMMENT_MARKER);
+  return parsed && { eventId: parsed.ownerId, commentId: parsed.itemId };
 }
 
 export function encodeComment(comment) {
@@ -434,6 +439,90 @@ export function decodeComment(raw, id) {
 // compare is the tie-break for two posted in the same millisecond.
 export function sortComments(list) {
   return [...list].sort((a, b) => Number(a.id) - Number(b.id) || a.id.localeCompare(b.id));
+}
+
+// Photos take the same shape as comments -- a row of their own per item, so
+// adding one is an insert rather than a read-modify-write of the event -- but
+// the row holds only a path. The file itself lives in Supabase Storage, for
+// the reason spelled out beside window.photos in index.html.
+const PHOTO_MARKER = "__photo__";
+
+export function photoKey(iso, eventId, photoId) {
+  return `avail:${iso}:${PHOTO_MARKER}${eventId}:${photoId}`;
+}
+
+export function photoGroup(iso, eventId) {
+  return `${iso}:${eventId}`;
+}
+
+export function parsePhotoPerson(person) {
+  const parsed = parseMarkedPerson(person, PHOTO_MARKER);
+  return parsed && { eventId: parsed.ownerId, photoId: parsed.itemId };
+}
+
+// Dimensions travel with the path so a thumbnail can hold its shape before
+// the image arrives, which stops the archive jumping as each one lands.
+export function encodePhoto(photo) {
+  return JSON.stringify({
+    author: photo.author,
+    path: photo.path,
+    w: photo.w,
+    h: photo.h,
+  });
+}
+
+export function decodePhoto(raw, id) {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.path !== "string" || !parsed.path) return null;
+    return {
+      id,
+      author: parsed.author || "",
+      path: parsed.path,
+      w: Number(parsed.w) || 0,
+      h: Number(parsed.h) || 0,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+export function sortPhotos(list) {
+  return [...list].sort((a, b) => Number(a.id) - Number(b.id) || a.id.localeCompare(b.id));
+}
+
+// Straight off a phone a photo is 3-5 MB, and every archive view pulls all of
+// them down again against a 5 GB/month egress budget -- about a dozen full
+// browses before it is spent. Longest side capped at 1600px takes that to
+// roughly 300 KB, still more detail than the archive ever displays, and the
+// budget lasts hundreds of browses instead.
+export const PHOTO_MAX_EDGE = 1600;
+const PHOTO_QUALITY = 0.82;
+
+export function scaledSize(w, h, maxEdge) {
+  const longest = Math.max(w, h);
+  if (!longest || longest <= maxEdge) return { w, h };
+  const ratio = maxEdge / longest;
+  return { w: Math.round(w * ratio), h: Math.round(h * ratio) };
+}
+
+// Re-encodes as JPEG whatever came in, which also gets HEIC off an iPhone
+// into something every browser can display -- iOS hands over a decodable
+// image even when the file on disk is HEIC, so the conversion happens here
+// rather than being asked of the viewer.
+async function downscaleImage(file) {
+  const bitmap = await createImageBitmap(file);
+  const { w, h } = scaledSize(bitmap.width, bitmap.height, PHOTO_MAX_EDGE);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+  const blob = await new Promise((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", PHOTO_QUALITY)
+  );
+  if (!blob) throw new Error("toBlob returned nothing");
+  return { blob, w, h };
 }
 
 export function splitDuration(duration) {
@@ -963,6 +1052,14 @@ export default function App() {
   // { "iso:eventId": [{ id, author, text }] } -- flat rather than nested per
   // day, because a thread is only ever read and written as a whole.
   const [dayComments, setDayComments] = useState({});
+  // Photos per event, keyed like the comment threads: "iso:eventId" -> [photo]
+  const [dayPhotos, setDayPhotos] = useState({});
+  // How many uploads are still in flight per event, so the strip can show
+  // placeholders. A count and not a boolean: several files can be picked at
+  // once and each finishes on its own.
+  const [photoUploads, setPhotoUploads] = useState({});
+  // The photo shown full-size, as { iso, eventId, id }, or null.
+  const [lightbox, setLightbox] = useState(null);
   // Only one thread is open at a time; a card is small and two expanded
   // threads in one day would push the rest of it off screen.
   const [openComments, setOpenComments] = useState(null);
@@ -1093,6 +1190,7 @@ export default function App() {
       const result = {};
       const events = {};
       const comments = {};
+      const photos = {};
       for (const iso of days) {
         result[iso] = {};
         events[iso] = [];
@@ -1110,6 +1208,15 @@ export default function App() {
           }
           continue;
         }
+        if (person.startsWith(PHOTO_MARKER)) {
+          const parsed = parsePhotoPerson(person);
+          const photo = parsed && decodePhoto(row.value, parsed.photoId);
+          if (photo) {
+            const group = photoGroup(iso, parsed.eventId);
+            (photos[group] = photos[group] || []).push(photo);
+          }
+          continue;
+        }
         if (person.startsWith(EVENT_MARKER)) {
           const id = person.slice(EVENT_MARKER.length);
           const ev = decodeEvent(row.value, id);
@@ -1124,6 +1231,9 @@ export default function App() {
       for (const group of Object.keys(comments)) {
         comments[group] = sortComments(comments[group]);
       }
+      for (const group of Object.keys(photos)) {
+        photos[group] = sortPhotos(photos[group]);
+      }
       setDayData(result);
       // Merged, not replaced. The archive keeps its events and threads in
       // these same maps, and refreshing the visible window must not throw
@@ -1137,6 +1247,16 @@ export default function App() {
           if (!(iso in result)) kept[group] = list;
         }
         return { ...kept, ...comments };
+      });
+      // Same merge rule as the threads above: drop only the groups this
+      // window just re-read, so the archive's photos survive a refresh.
+      setDayPhotos((prev) => {
+        const kept = {};
+        for (const [group, list] of Object.entries(prev)) {
+          const iso = group.slice(0, group.indexOf(":"));
+          if (!(iso in result)) kept[group] = list;
+        }
+        return { ...kept, ...photos };
       });
       setError(null);
     } catch (e) {
@@ -1160,6 +1280,7 @@ export default function App() {
     try {
       const events = {};
       const comments = {};
+      const photos = {};
       let upper = archiveFrom || days[0]; // exclusive: today is not archive
       // Only a past event is a floor. The oldest event overall can be one
       // that has not happened yet, and stepping back towards it would be
@@ -1185,6 +1306,13 @@ export default function App() {
               const group = commentGroup(iso, parsed.eventId);
               (comments[group] = comments[group] || []).push(comment);
             }
+          } else if (person.startsWith(PHOTO_MARKER)) {
+            const parsed = parsePhotoPerson(person);
+            const photo = parsed && decodePhoto(row.value, parsed.photoId);
+            if (photo) {
+              const group = photoGroup(iso, parsed.eventId);
+              (photos[group] = photos[group] || []).push(photo);
+            }
           } else if (person.startsWith(EVENT_MARKER)) {
             const ev = decodeEvent(row.value, person.slice(EVENT_MARKER.length));
             if (ev) (events[iso] = events[iso] || []).push(ev);
@@ -1203,8 +1331,12 @@ export default function App() {
       for (const group of Object.keys(comments)) {
         comments[group] = sortComments(comments[group]);
       }
+      for (const group of Object.keys(photos)) {
+        photos[group] = sortPhotos(photos[group]);
+      }
       setDayEvents((prev) => ({ ...prev, ...events }));
       setDayComments((prev) => ({ ...prev, ...comments }));
+      setDayPhotos((prev) => ({ ...prev, ...photos }));
       setArchiveIsos((prev) =>
         [...new Set([...prev, ...Object.keys(events)])].sort().reverse()
       );
@@ -1308,6 +1440,28 @@ export default function App() {
                 ? list.map((c) => (c.id === comment.id ? comment : c))
                 : [...list, comment];
               return { ...prev, [group]: sortComments(next) };
+            });
+            return;
+          }
+
+          if (person.startsWith(PHOTO_MARKER)) {
+            const parsed = parsePhotoPerson(person);
+            if (!parsed) return;
+            const group = photoGroup(iso, parsed.eventId);
+            setDayPhotos((prev) => {
+              const list = prev[group] || [];
+              if (type === "DELETE") {
+                return { ...prev, [group]: list.filter((p) => p.id !== parsed.photoId) };
+              }
+              const photo = decodePhoto(value, parsed.photoId);
+              if (!photo) return prev;
+              // Matched on id for the same reason the thread above is: your
+              // own upload comes back as a message, and it has to land on the
+              // photo already showing rather than beside it.
+              const next = list.some((p) => p.id === photo.id)
+                ? list.map((p) => (p.id === photo.id ? photo : p))
+                : [...list, photo];
+              return { ...prev, [group]: sortPhotos(next) };
             });
             return;
           }
@@ -1783,6 +1937,64 @@ export default function App() {
     }
   }
 
+  // Files are handled one at a time rather than in parallel: a phone picking
+  // ten photos would otherwise decode ten full-size bitmaps at once, which is
+  // where a browser tab runs out of memory and dies. Each one appears as it
+  // lands, so the wait is visible rather than silent.
+  async function uploadPhotos(iso, eventId, fileList) {
+    const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
+    if (!files.length || !name || !window.photos) return;
+    const group = photoGroup(iso, eventId);
+    setPhotoUploads((prev) => ({ ...prev, [group]: (prev[group] || 0) + files.length }));
+
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const { blob, w, h } = await downscaleImage(files[i]);
+        // Ids stay purely numeric so they sort as numbers; the offset keeps
+        // several files picked in one go from colliding on the same
+        // millisecond.
+        const photoId = String(Date.now() + i);
+        const path = `${iso}/${eventId || "brez-id"}/${photoId}.jpg`;
+        await window.photos.upload(path, blob);
+        const photo = { id: photoId, author: name, path, w, h };
+        setDayPhotos((prev) => ({
+          ...prev,
+          [group]: sortPhotos([...(prev[group] || []), photo]),
+        }));
+        await window.storage.set(photoKey(iso, eventId, photoId), encodePhoto(photo), true);
+      } catch (e) {
+        console.error("photo upload failed:", e);
+        setError("Slike ni bilo mogoče naložiti. Poskusi znova.");
+      } finally {
+        setPhotoUploads((prev) => ({
+          ...prev,
+          [group]: Math.max(0, (prev[group] || 1) - 1),
+        }));
+      }
+    }
+  }
+
+  // Removes the row that puts the photo in the archive; the file itself stays
+  // in the bucket. That is deliberate -- the bucket grants anon no delete,
+  // because a public bucket anyone may delete from is one bad visitor away
+  // from losing every photo, and unlike an availability entry there is no
+  // second copy to retype it from. Clearing the orphaned files is a job for
+  // the dashboard, not for whoever taps this.
+  async function deletePhoto(iso, eventId, photoId) {
+    const group = photoGroup(iso, eventId);
+    setDayPhotos((prev) => ({
+      ...prev,
+      [group]: (prev[group] || []).filter((p) => p.id !== photoId),
+    }));
+    setLightbox(null);
+    try {
+      await window.storage.delete(photoKey(iso, eventId, photoId), true);
+    } catch (e) {
+      setError("Slike ni bilo mogoče odstraniti. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
   async function toggleAttendance(iso, id) {
     const existing = dayEvents[iso]?.find((e) => e.id === id);
     if (!existing || !name) return;
@@ -2147,6 +2359,39 @@ export default function App() {
     </div>
   );
 
+  const lightboxPhoto =
+    lightbox &&
+    window.photos &&
+    (dayPhotos[photoGroup(lightbox.iso, lightbox.eventId)] || []).find(
+      (p) => p.id === lightbox.id
+    );
+
+  const photoLightbox = lightboxPhoto && (
+    <div style={styles.modalOverlay} onClick={() => setLightbox(null)}>
+      <div style={styles.lightboxInner} onClick={(e) => e.stopPropagation()}>
+        <img
+          src={window.photos.publicUrl(lightboxPhoto.path)}
+          alt=""
+          style={styles.lightboxImg}
+        />
+        <div style={styles.lightboxBar}>
+          <span style={styles.lightboxAuthor}>
+            {lightboxPhoto.author ? `Naložil: ${lightboxPhoto.author}` : ""}
+          </span>
+          {/* Only your own, the rule the comments already follow. */}
+          {lightboxPhoto.author === name && (
+            <button
+              style={styles.deleteButton}
+              onClick={() => deletePhoto(lightbox.iso, lightbox.eventId, lightbox.id)}
+            >
+              <Trash2 size={12} /> Odstrani
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   const viewPersonModal = viewPerson && (
     <div style={styles.modalOverlay} onClick={() => setViewPerson(null)}>
       <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
@@ -2254,6 +2499,65 @@ export default function App() {
   // shows the same events the calendar does, so the comments had to stop
   // being markup buried inside the day view and become something both pages
   // can call.
+  function renderPhotoStrip(iso, eventId) {
+    // Guarded rather than assumed, the same way the realtime shim is: a
+    // browser still holding an older cached index.html has no window.photos,
+    // and the archive should quietly lack a photo row instead of failing to
+    // render at all.
+    if (!window.photos) return null;
+    const key = photoGroup(iso, eventId);
+    const photos = dayPhotos[key] || [];
+    const pending = photoUploads[key] || 0;
+    const inputId = `photo-input-${key}`;
+    return (
+      <div style={styles.photoBlock}>
+        <div style={styles.photoRow}>
+          {photos.map((p) => (
+            <button
+              key={p.id}
+              style={styles.photoThumb}
+              onClick={() => setLightbox({ iso, eventId, id: p.id })}
+              aria-label={`Slika od ${p.author || "neznano"}`}
+            >
+              {/* loading="lazy" matters more here than anywhere else in the
+                  app: the archive grows without bound, and every thumbnail is
+                  a download against a metered egress budget. */}
+              <img
+                src={window.photos.publicUrl(p.path)}
+                alt=""
+                loading="lazy"
+                style={styles.photoThumbImg}
+              />
+            </button>
+          ))}
+          {Array.from({ length: pending }, (_, i) => (
+            <div key={`pending-${i}`} style={styles.photoPending}>
+              <div style={styles.loadingDot} />
+            </div>
+          ))}
+          {/* A label rather than a button, because the file input it opens
+              has to stay in the DOM to be clickable but must not be seen. */}
+          <label htmlFor={inputId} style={styles.photoAdd} title="Dodaj slike">
+            <Plus size={16} />
+            <input
+              id={inputId}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => {
+                uploadPhotos(iso, eventId, e.target.files);
+                // Cleared so picking the same file twice in a row still
+                // fires a change event the second time.
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+      </div>
+    );
+  }
+
   function renderCommentThread(iso, eventId) {
     const key = commentGroup(iso, eventId);
     const comments = dayComments[key] || [];
@@ -2646,6 +2950,7 @@ export default function App() {
                     </div>
                   )}
 
+                  {renderPhotoStrip(iso, event.id)}
                   {renderCommentThread(iso, event.id)}
                 </div>
               )}
@@ -2694,6 +2999,7 @@ export default function App() {
     return (
       <div style={isDesktop ? styles.pageDesktop : styles.page}>
         {isDesktop ? <div style={styles.desktopContainer}>{shell}</div> : shell}
+        {photoLightbox}
         {settingsModal}
       </div>
     );

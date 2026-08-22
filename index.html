@@ -218,6 +218,32 @@
         },
       };
 
+      // Photos are files, not key/value text, so they go to Supabase Storage
+      // rather than into kv_store. A window query pulls every value it
+      // matches and realtime pushes every changed row to every open browser,
+      // so an image sitting in a row would ride along on both -- repeatedly,
+      // and for everyone. What kv_store holds is only the path.
+      const PHOTO_BUCKET = "arhiv";
+      window.photos = {
+        // upsert stays off: a clash means two uploads generated the same id in
+        // the same millisecond, and failing is better than one silently
+        // replacing the other's photo.
+        async upload(path, blob) {
+          const { error } = await supabase.storage
+            .from(PHOTO_BUCKET)
+            .upload(path, blob, {
+              contentType: blob.type || "image/jpeg",
+              upsert: false,
+            });
+          if (error) throw error;
+          return { path };
+        },
+        publicUrl(path) {
+          const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+          return data.publicUrl;
+        },
+      };
+
       window.storage = {
         get: (key, shared) => (shared ? sharedStore : localStore).get(key),
         set: (key, value, shared) => (shared ? sharedStore : localStore).set(key, value),
