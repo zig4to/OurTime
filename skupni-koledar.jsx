@@ -1390,6 +1390,57 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
   );
 }
 
+// How to get the calendar onto a home screen. Written once and shown in two
+// places -- full screen on a device that has never seen it, and behind a
+// button in the footer for anyone who dismissed it and later wants it back.
+const INSTALL_STEPS = [
+  {
+    Icon: Chrome,
+    title: "Odpri v Chromu",
+    detail:
+      "Povezavo do koledarja prilepi v Chrome. V drugih brskalnikih namestitev pogosto ni na voljo.",
+  },
+  {
+    Icon: MoreVertical,
+    title: "Tapni tri pike",
+    detail: "Zgoraj desno v Chromu.",
+  },
+  {
+    Icon: Download,
+    title: "Izberi Namesti in ustvari bližnjico",
+    detail: "V meniju, ki se odpre.",
+  },
+  {
+    Icon: Smartphone,
+    title: "Izberi Namesti aplikacijo",
+    detail: "Če te možnosti ni, izberi Namesti bližnjico.",
+  },
+];
+
+const INSTALL_LEAD =
+  "Nameščena se odpre čez cel zaslon, brez naslovne vrstice brskalnika, in je precej prijetnejša za uporabo.";
+
+function InstallSteps() {
+  return (
+    <div style={styles.installSteps}>
+      {INSTALL_STEPS.map(({ Icon, title, detail }, i) => (
+        <div key={title} style={styles.installStep}>
+          <span style={styles.installStepIcon}>
+            <Icon size={18} />
+          </span>
+          <div style={styles.installStepBody}>
+            <div style={styles.installStepTitle}>
+              <span style={styles.installStepNum}>{i + 1}</span>
+              {title}
+            </div>
+            <div style={styles.installStepDetail}>{detail}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState(null);
@@ -1414,6 +1465,7 @@ export default function App() {
   // device -- or never shown at all, because the app is already installed.
   const [installHintSeen, setInstallHintSeen] = useState(null);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
   // Re-rolled once per load, so the two people a collapsed day shows change
   // from visit to visit rather than the same name always leading. A ref and
   // not state: these rows re-render constantly -- the event strip alone
@@ -2660,29 +2712,6 @@ export default function App() {
     </div>
   );
 
-  const installSteps = [
-    {
-      icon: <Chrome size={18} />,
-      title: "Odpri v Chromu",
-      detail: "Povezavo do koledarja prilepi v Chrome. V drugih brskalnikih namestitev pogosto ni na voljo.",
-    },
-    {
-      icon: <MoreVertical size={18} />,
-      title: "Tapni tri pike",
-      detail: "Zgoraj desno v Chromu.",
-    },
-    {
-      icon: <Download size={18} />,
-      title: "Izberi Namesti in ustvari bližnjico",
-      detail: "V meniju, ki se odpre.",
-    },
-    {
-      icon: <Smartphone size={18} />,
-      title: "Izberi Namesti aplikacijo",
-      detail: "Če te možnosti ni, izberi Namesti bližnjico.",
-    },
-  ];
-
   const installScreen = (
     <div style={styles.centerScreen}>
       <div style={styles.installCard}>
@@ -2690,24 +2719,8 @@ export default function App() {
           <div style={styles.installEyebrow}>Garaža Klub Koledar</div>
           <h1 style={styles.installTitle}>Namesti na domači zaslon</h1>
         </div>
-        <p style={styles.installLead}>
-          Nameščena se odpre čez cel zaslon, brez naslovne vrstice brskalnika,
-          in je precej prijetnejša za uporabo.
-        </p>
-        <div style={styles.installSteps}>
-          {installSteps.map((step, i) => (
-            <div key={step.title} style={styles.installStep}>
-              <span style={styles.installStepIcon}>{step.icon}</span>
-              <div style={styles.installStepBody}>
-                <div style={styles.installStepTitle}>
-                  <span style={styles.installStepNum}>{i + 1}</span>
-                  {step.title}
-                </div>
-                <div style={styles.installStepDetail}>{step.detail}</div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <p style={styles.installLead}>{INSTALL_LEAD}</p>
+        <InstallSteps />
         <button style={styles.primaryButton} onClick={dismissInstallHint}>
           <Check size={16} /> Razumem
         </button>
@@ -3027,6 +3040,32 @@ export default function App() {
               ))}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* The same instructions the first-run screen gives. Once dismissed
+          that screen never comes back, and this is where someone who meant
+          to install it later can find them again. */}
+      <button
+        style={styles.whatsNewToggle}
+        onClick={() => setShowInstall((open) => !open)}
+        aria-expanded={showInstall}
+      >
+        <Smartphone size={13} />
+        Namesti aplikacijo
+        <ChevronRight
+          size={14}
+          style={{
+            marginLeft: "auto",
+            transform: showInstall ? "rotate(90deg)" : "none",
+            transition: "transform 150ms ease",
+          }}
+        />
+      </button>
+      {showInstall && (
+        <div style={styles.whatsNewDay}>
+          <p style={styles.installLead}>{INSTALL_LEAD}</p>
+          <InstallSteps />
         </div>
       )}
     </div>
