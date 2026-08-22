@@ -1917,12 +1917,16 @@ export default function App() {
       const events = {};
       const comments = {};
       const photos = {};
-      let upper = archiveFrom || days[0]; // exclusive: today is not archive
-      // Only a past event is a floor. The oldest event overall can be one
-      // that has not happened yet, and stepping back towards it would be
+      // Exclusive, and set past today rather than at it: an outing is over
+      // hours before the day is, and waiting until midnight to open the
+      // archive meant nobody could put their photos up on the evening they
+      // took them, which is the only evening anyone remembers to.
+      let upper = archiveFrom || addDays(days[0], 1);
+      // Only an event today or earlier is a floor. The oldest event overall
+      // can be one still to come, and stepping back towards it would be
       // stepping towards something the archive will never show.
       const floor =
-        oldestEventIso && oldestEventIso < days[0] ? oldestEventIso : null;
+        oldestEventIso && oldestEventIso <= days[0] ? oldestEventIso : null;
 
       // Steps back a slab at a time until this press has something to show,
       // or until it has reached past the oldest event there is. A quiet
@@ -4080,12 +4084,14 @@ export default function App() {
     );
   }
 
-  // The oldest event that is actually in the past. An upcoming event is the
-  // oldest one there is on a calendar that has only just started, and
-  // reporting it as the bottom of the archive would be reporting a date the
-  // archive can never reach.
+  // The oldest event the archive can actually reach, which now includes
+  // today. An event still to come is the oldest one there is on a calendar
+  // that has only just started, and reporting it as the bottom of the
+  // archive would be reporting a date the archive can never show.
   const archiveFloor =
-    oldestEventIso && days.length && oldestEventIso < days[0] ? oldestEventIso : null;
+    oldestEventIso && days.length && oldestEventIso <= days[0]
+      ? oldestEventIso
+      : null;
 
   // Nothing older left to fetch: either no event has happened yet, or the
   // slabs have already reached past the oldest one that has. Stays false
