@@ -1775,6 +1775,11 @@ export default function App() {
   // Assigned across everyone in the whole visible window, not per day, so a
   // set of initials keeps the same color from row to row.
   const personColors = assignPersonColors([
+    // Yourself, whether or not you appear anywhere in the window: your chip
+    // is in the menu on every screen, and it would otherwise fall back to
+    // green on a week you happened not to fill in -- a different colour from
+    // the one the day rows give you the moment you do.
+    ...(name ? [name] : []),
     ...Object.values(dayData).flatMap((dayEntries) => Object.keys(dayEntries)),
     // Anyone still playing their exit counts as present for as long as their
     // chip is on screen. They are already out of the data below, so without
@@ -1797,24 +1802,10 @@ export default function App() {
     />
   );
 
-  const avatarButton = (
-    <button
-      style={styles.avatarButton}
-      onClick={toggleEditingName}
-      aria-label="Uredi ime"
-    >
-      {initials(name)}
-      <Pencil size={11} style={styles.pencilBadge} />
-    </button>
-  );
-
-  // The avatar and the menu share one positioned box: the dropdown hangs off
-  // it, and the ref that decides what counts as "outside" has to cover both,
-  // or tapping the avatar to close the menu would read as an outside click
-  // and a toggle at the same time.
+  // One button in the header now; the ref still wraps it because the dropdown
+  // hangs off this box and it is what "outside" is measured against.
   const headerActions = (
     <div ref={menuRef} style={styles.headerActions}>
-      {avatarButton}
       <button
         style={styles.menuButton}
         onClick={() => setMenuOpen((open) => !open)}
@@ -1825,6 +1816,24 @@ export default function App() {
       </button>
       {menuOpen && (
         <div style={styles.menuPanel}>
+          {/* Who you are and the way to change it, in one row: the initials
+              were the only thing in the header saying which account this is,
+              so moving the control into the menu had to bring them along. */}
+          <button
+            style={styles.menuProfile}
+            onClick={() => {
+              setMenuOpen(false);
+              toggleEditingName();
+            }}
+            aria-label="Uredi ime"
+          >
+            <span style={styles.avatarChip(personColors[name] || GREEN)}>
+              {initials(name)}
+            </span>
+            <span style={styles.menuProfileName}>{name}</span>
+            <Pencil size={13} style={styles.menuProfilePencil} />
+          </button>
+          <div style={styles.menuDivider} />
           <button style={styles.menuItem(true)} disabled>
             <Archive size={14} /> Arhiv
             <span style={styles.menuItemNote}>kmalu</span>
