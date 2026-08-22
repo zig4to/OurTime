@@ -3980,12 +3980,12 @@ export default function App() {
   // be a standing reminder of no plans.
   const tomorrowIso = addDays(today, 1);
   const tomorrowReminder = (dayEvents[tomorrowIso] || []).length > 0 && (
-    <div style={styles.tomorrowSection}>
+    <>
       <div style={styles.recentEventsHeading}>Ne pozabi, jutri gremo</div>
       <div style={styles.tomorrowCards}>
         {renderEventSection(tomorrowIso, { reminder: true })}
       </div>
-    </div>
+    </>
   );
 
   if (isDesktop) {
